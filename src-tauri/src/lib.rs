@@ -1,0 +1,134 @@
+mod db;
+mod fs;
+mod git;
+mod osc;
+mod pty;
+
+use db::{Db, Profile, RecentPath};
+use pty::{PtyManager, SpawnOptions};
+use tauri::ipc::Channel;
+use tauri::{Manager, State};
+
+fn e<E: std::fmt::Display>(err: E) -> String {
+    err.to_string()
+}
+
+// ---------- PTY ----------
+
+#[tauri::command]
+fn pty_spawn(app: tauri::AppHandle, state: State<'_, PtyManager>, opts: SpawnOptions, on_data: Channel) -> Result<(), String> {
+    state.spawn(app, opts, on_data).map_err(e)
+}
+
+#[tauri::command]
+fn pty_write(state: State<'_, PtyManager>, pane_id: String, data: String) -> Result<(), String> {
+    state.write(&pane_id, data.as_bytes()).map_err(e)
+}
+
+#[tauri::command]
+fn pty_resize(state: State<'_, PtyManager>, pane_id: String, cols: u16, rows: u16) -> Result<(), String> {
+    state.resize(&pane_id, cols, rows).map_err(e)
+}
+
+#[tauri::command]
+fn pty_kill(state: State<'_, PtyManager>, pane_id: String) {
+    state.kill(&pane_id)
+}
+
+#[tauri::command]
+fn pty_foreground(state: State<'_, PtyManager>, pane_id: String) -> Option<String> {
+    state.foreground_process(&pane_id)
+}
+
+// ---------- Persistence ----------
+
+#[tauri::command]
+fn recent_list(db: State<'_, Db>, limit: u32) -> Result<Vec<RecentPath>, String> {
+    db.recent(limit).map_err(e)
+}
+#[tauri::command]
+fn recent_touch(db: State<'_, Db>, path: String) -> Result<(), String> {
+    db.touch_recent(&path).map_err(e)
+}
+#[tauri::command]
+fn recent_pin(db: State<'_, Db>, path: String, pinned: bool) -> Result<(), String> {
+    db.set_pinned(&path, pinned).map_err(e)
+}
+#[tauri::command]
+fn recent_remove(db: State<'_, Db>, path: String) -> Result<(), String> {
+    db.remove_recent(&path).map_err(e)
+}
+#[tauri::command]
+fn profiles_list(db: State<'_, Db>) -> Result<Vec<Profile>, String> {
+    db.profiles().map_err(e)
+}
+#[tauri::command]
+fn profile_save(db: State<'_, Db>, profile: Profile) -> Result<(), String> {
+    db.save_profile(&profile).map_err(e)
+}
+#[tauri::command]
+fn profile_delete(db: State<'_, Db>, id: String) -> Result<(), String> {
+    db.delete_profile(&id).map_err(e)
+}
+#[tauri::command]
+fn setting_get(db: State<'_, Db>, key: String) -> Result<Option<String>, String> {
+    db.get_setting(&key).map_err(e)
+}
+#[tauri::command]
+fn setting_set(db: State<'_, Db>, key: String, value: String) -> Result<(), String> {
+    db.set_setting(&key, &value).map_err(e)
+}
+#[tauri::command]
+fn home_dir() -> String {
+    dirs::home_dir().map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|| "/".into())
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
+        .manage(PtyManager::default())
+        .manage(fs::Watchers::default())
+        .setup(|app| {
+            let dir = app.path().app_data_dir()?;
+            app.manage(Db::open(&dir)?);
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            pty_spawn,
+            pty_write,
+            pty_resize,
+            pty_kill,
+            pty_foreground,
+            recent_list,
+            recent_touch,
+            recent_pin,
+            recent_remove,
+            profiles_list,
+            profile_save,
+            profile_delete,
+            setting_get,
+            setting_set,
+            home_dir,
+            git::git_status,
+            git::git_log,
+            git::git_branches,
+            git::git_worktrees,
+            git::git_diff,
+            fs::fs_list_dir,
+            fs::fs_read_text,
+            fs::fs_write_text,
+            fs::fs_create_project_dir,
+            fs::fs_watch,
+            fs::fs_unwatch,
+        ])
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                app.state::<PtyManager>().kill_all();
+            }
+        });
+}

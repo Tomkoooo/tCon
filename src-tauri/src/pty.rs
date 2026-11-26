@@ -1,0 +1,181 @@
+//! PTY session manager: one portable-pty session per terminal pane.
+
+use crate::osc::{OscEvent, OscFilter, PROBE_REPLY};
+use parking_lot::Mutex;
+use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
+use serde::Serialize;
+use std::collections::HashMap;
+use std::io::{Read, Write};
+use std::sync::Arc;
+use tauri::ipc::{Channel, InvokeResponseBody};
+use tauri::{AppHandle, Emitter};
+
+struct Session {
+    writer: Arc<Mutex<Box<dyn Write + Send>>>,
+    master: Box<dyn MasterPty + Send>,
+    child: Arc<Mutex<Box<dyn Child + Send + Sync>>>,
+}
+
+#[derive(Default)]
+pub struct PtyManager {
+    sessions: Mutex<HashMap<String, Session>>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct StatusEvent {
+    pane_id: String,
+    status: crate::osc::ProgramStatus,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct CwdEvent {
+    pane_id: String,
+    cwd: String,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct ExitEvent {
+    pane_id: String,
+    code: Option<u32>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpawnOptions {
+    pub pane_id: String,
+    pub cwd: String,
+    pub cols: u16,
+    pub rows: u16,
+    /// Extra environment (from the selected account profile).
+    #[serde(default)]
+    pub env: HashMap<String, String>,
+    /// Command typed into the shell after start (e.g. "claude").
+    pub startup_command: Option<String>,
+}
+
+fn default_shell() -> String {
+    std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into())
+}
+
+impl PtyManager {
+    pub fn spawn(&self, app: AppHandle, opts: SpawnOptions, on_data: Channel) -> anyhow::Result<()> {
+        let pty = native_pty_system();
+        let pair = pty.openpty(PtySize { rows: opts.rows.max(2), cols: opts.cols.max(2), pixel_width: 0, pixel_height: 0 })?;
+
+        let mut cmd = CommandBuilder::new(default_shell());
+        cmd.arg("-l");
+        let cwd = if std::path::Path::new(&opts.cwd).is_dir() {
+            opts.cwd.clone()
+        } else {
+            dirs::home_dir().map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|| "/".into())
+        };
+        cmd.cwd(&cwd);
+        cmd.env("TERM", "xterm-256color");
+        cmd.env("COLORTERM", "truecolor");
+        cmd.env("TERM_PROGRAM", "tCon");
+        cmd.env("TERM_PROGRAM_VERSION", env!("CARGO_PKG_VERSION"));
+        cmd.env("LANG", std::env::var("LANG").unwrap_or_else(|_| "en_US.UTF-8".into()));
+        cmd.env_remove("CLAUDECODE"); // don't let nested sessions think they're inside Claude
+        for (k, v) in &opts.env {
+            cmd.env(k, v);
+        }
+
+        let child = pair.slave.spawn_command(cmd)?;
+        drop(pair.slave);
+        let mut reader = pair.master.try_clone_reader()?;
+        let writer: Arc<Mutex<Box<dyn Write + Send>>> = Arc::new(Mutex::new(pair.master.take_writer()?));
+        let child = Arc::new(Mutex::new(child));
+
+        if let Some(c) = opts.startup_command.as_ref().filter(|c| !c.trim().is_empty()) {
+            let mut w = writer.lock();
+            let _ = w.write_all(format!("{}\r", c.trim()).as_bytes());
+        }
+
+        let pane_id = opts.pane_id.clone();
+        let w2 = writer.clone();
+        let child2 = child.clone();
+        std::thread::Builder::new().name(format!("pty-{pane_id}")).spawn(move || {
+            let mut filter = OscFilter::new();
+            let mut buf = vec![0u8; 64 * 1024];
+            let mut events = Vec::new();
+            loop {
+                match reader.read(&mut buf) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => {
+                        events.clear();
+                        let out = filter.feed(&buf[..n], &mut events);
+                        for ev in events.drain(..) {
+                            match ev {
+                                OscEvent::Probe => {
+                                    let mut w = w2.lock();
+                                    let _ = w.write_all(PROBE_REPLY);
+                                    let _ = w.flush();
+                                }
+                                OscEvent::Status(status) => {
+                                    let _ = app.emit("pane-status", StatusEvent { pane_id: pane_id.clone(), status });
+                                }
+                                OscEvent::Cwd(cwd) => {
+                                    let _ = app.emit("pane-cwd", CwdEvent { pane_id: pane_id.clone(), cwd });
+                                }
+                            }
+                        }
+                        if !out.is_empty() && on_data.send(InvokeResponseBody::Raw(out)).is_err() {
+                            break;
+                        }
+                    }
+                }
+            }
+            let code = child2.lock().wait().ok().map(|s| s.exit_code());
+            let _ = app.emit("pane-exit", ExitEvent { pane_id: pane_id.clone(), code });
+            if let Some(state) = tauri::Manager::try_state::<PtyManager>(&app) {
+                state.sessions.lock().remove(&pane_id);
+            }
+        })?;
+
+        self.sessions.lock().insert(opts.pane_id, Session { writer, master: pair.master, child });
+        Ok(())
+    }
+
+    pub fn write(&self, pane_id: &str, data: &[u8]) -> anyhow::Result<()> {
+        let w = self.sessions.lock().get(pane_id).map(|s| s.writer.clone());
+        if let Some(w) = w {
+            let mut w = w.lock();
+            w.write_all(data)?;
+            w.flush()?;
+        }
+        Ok(())
+    }
+
+    pub fn resize(&self, pane_id: &str, cols: u16, rows: u16) -> anyhow::Result<()> {
+        if let Some(s) = self.sessions.lock().get(pane_id) {
+            s.master.resize(PtySize { rows: rows.max(2), cols: cols.max(2), pixel_width: 0, pixel_height: 0 })?;
+        }
+        Ok(())
+    }
+
+    pub fn kill(&self, pane_id: &str) {
+        if let Some(s) = self.sessions.lock().remove(pane_id) {
+            let _ = s.child.lock().kill();
+        }
+    }
+
+    pub fn kill_all(&self) {
+        for (_, s) in self.sessions.lock().drain() {
+            let _ = s.child.lock().kill();
+        }
+    }
+
+    /// Name of the foreground process (e.g. "claude", "zsh") for tab titles.
+    pub fn foreground_process(&self, pane_id: &str) -> Option<String> {
+        let sessions = self.sessions.lock();
+        let s = sessions.get(pane_id)?;
+        let pid = s.master.process_group_leader()?;
+        let out = std::process::Command::new("ps").args(["-o", "comm=", "-p", &pid.to_string()]).output().ok()?;
+        let name = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let name = name.rsplit('/').next().unwrap_or(&name).trim_start_matches('-').to_string();
+        if name.is_empty() { None } else { Some(name) }
+    }
+}
