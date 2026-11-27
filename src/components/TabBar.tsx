@@ -4,6 +4,7 @@ import { INACTIVE_AFTER_MS, PALETTE, projectStatus, useWorkspace } from "../stor
 import type { Project } from "../types";
 import { StatusDot, statusLabel } from "./StatusDot";
 import { useContextMenu } from "./ContextMenu";
+import { confirmProjectEditors } from "./editor/editorActions";
 
 function useNow(intervalMs: number) {
   const [now, setNow] = useState(Date.now());
@@ -106,8 +107,8 @@ function Tab({ project, index }: { project: Project; index: number }) {
       },
       { label: "Project Settings…", action: () => st.setModal({ kind: "projectSettings", projectId: project.id }) },
       "sep",
-      { label: "New Claude Pane", hint: "⇧⌘C", action: () => st.addPane(project.id, { claude: true }) },
-      { label: "New Shell Pane", hint: "⌘D", action: () => st.addPane(project.id, { claude: false }) },
+      { label: "New Claude Terminal", hint: "⇧⌘C", action: () => st.addTerminal(project.id, { claude: true }) },
+      { label: "New Terminal", hint: "⇧⌘T", action: () => st.addTerminal(project.id, { claude: false }) },
       { label: project.sidebarOpen ? "Hide Sidebar" : "Show Sidebar", hint: "⌘B", action: () => st.updateProject(project.id, { sidebarOpen: !project.sidebarOpen }) },
       "sep",
       { label: "Close Project", action: () => void closeWithConfirm(project) },
@@ -181,5 +182,6 @@ export async function closeWithConfirm(project: Project) {
   const st = useWorkspace.getState();
   const busy = Object.keys(project.panes).some((id) => ["working", "blocked"].includes(st.statuses[id]?.state ?? ""));
   if (busy && !(await ask(`"${project.name}" has an active Claude session. Close it anyway?`, { title: "Close project", kind: "warning" }))) return;
+  if (!(await confirmProjectEditors(project.id))) return;
   st.closeProject(project.id);
 }

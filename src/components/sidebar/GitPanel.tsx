@@ -7,6 +7,7 @@ import { computeGraph, GRAPH_COLORS } from "./graphLayout";
 import type { GraphRow } from "./graphLayout";
 import { baseName, decorFor, parentDir, trimSlash } from "./gitDecor";
 import "./sidebar.css";
+import { FileIcon } from "../FileIcon";
 
 export interface GitPanelProps {
   root: string;
@@ -119,6 +120,7 @@ function ChangeRow({ file, staged, onOpenDiff }: { file: GitFileStatus; staged: 
       title={`${file.path} — ${staged ? "staged" : "working tree"}`}
       onClick={() => onOpenDiff?.(rel, staged)}
     >
+      <FileIcon name={baseName(rel)} />
       <span className="sb-name">{baseName(rel)}</span>
       {dir && <span className="sb-desc">{dir}</span>}
       <span className="sb-spacer" />

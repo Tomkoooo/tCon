@@ -3,7 +3,8 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import { api } from "./api";
-import { findPane, useWorkspace } from "./store/workspace";
+import { findPane, isPaneVisible, useWorkspace } from "./store/workspace";
+import { closeEditors } from "./components/editor/editorActions";
 import { terminals } from "./terminal/registry";
 import type { FsChangedEvent, ProgramStatus } from "./types";
 import { TabBar } from "./components/TabBar";
@@ -43,8 +44,7 @@ async function notify(paneId: string, status: ProgramStatus) {
   const found = findPane(st, paneId);
   if (!found) return;
   const [project, pane] = found;
-  const visible = document.hasFocus() && st.activeProjectId === project.id && project.focusedPaneId === paneId;
-  if (visible) return;
+  if (isPaneVisible(st, paneId)) return;
   try {
     let ok = await isPermissionGranted();
     if (!ok) ok = (await requestPermission()) === "granted";
@@ -138,7 +138,6 @@ export function jumpToAttention() {
 function useShortcuts() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!e.metaKey || e.ctrlKey) return;
       const st = useWorkspace.getState();
       const project = st.activeProjectId ? st.projects[st.activeProjectId] : null;
       const k = e.key.toLowerCase();
@@ -147,9 +146,19 @@ function useShortcuts() {
         e.stopPropagation();
         fn();
       };
+      // Ctrl combos (VS Code style)
+      if (e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (e.key === "Tab") return run(() => st.cycleTab(e.shiftKey ? -1 : 1));
+        if (project && (e.code === "Backquote" || e.key === "`")) {
+          return run(() => (e.shiftKey ? st.addTerminal(project.id, { claude: false }) : st.togglePanel(project.id)));
+        }
+        return;
+      }
+      if (!e.metaKey || e.ctrlKey) return;
+      const inEditor = !!project && project.focusArea === "editor" && project.editorGroups.length > 0;
       if (k === "t" && !e.shiftKey) return run(() => st.setModal({ kind: "newProject" }));
       if (k === "," ) return run(() => st.setModal({ kind: "profiles" }));
-      if (k === "j") return run(jumpToAttention);
+      if (k === "j" && !e.shiftKey) return run(jumpToAttention);
       if (/^[1-9]$/.test(e.key) && !e.shiftKey && !e.altKey) {
         const id = e.key === "9" ? st.order[st.order.length - 1] : st.order[Number(e.key) - 1];
         return id ? run(() => st.setActive(id)) : undefined;
@@ -159,15 +168,29 @@ function useShortcuts() {
       if (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowUp")) return run(() => st.focusAdjacent(-1));
       if (e.altKey && (e.key === "ArrowRight" || e.key === "ArrowDown")) return run(() => st.focusAdjacent(1));
       if (!project) return;
-      if (k === "d") return run(() => st.addPane(project.id, { claude: false, direction: e.shiftKey ? "column" : "row" }));
-      if (k === "c" && e.shiftKey) return run(() => st.addPane(project.id, { claude: true, direction: "row" }));
-      if (k === "w" && !e.shiftKey) return run(() => project.focusedPaneId && st.closeLeaf(project.id, project.focusedPaneId));
+      if (k === "t" && e.shiftKey) return run(() => st.addTerminal(project.id, { claude: false }));
+      if (k === "c" && e.shiftKey) return run(() => st.addTerminal(project.id, { claude: true }));
+      if (k === "d" && !inEditor) return run(() => st.addTerminal(project.id, { claude: false, split: e.shiftKey ? "column" : "row" }));
+      if (k === "j" && e.shiftKey) return run(() => st.togglePanel(project.id));
+      if (k === "m" && e.shiftKey) return run(() => st.togglePanelMaximized(project.id));
+      if (k === "w" && !e.shiftKey) {
+        return run(() => {
+          if (inEditor) {
+            const g = project.editorGroups.find((x) => x.id === project.activeEditorGroupId);
+            if (g?.activeTabId) void closeEditors(project.id, [g.activeTabId]);
+          } else if (project.focusedPaneId) st.closePane(project.id, project.focusedPaneId);
+        });
+      }
+      if (e.key === "\\" && inEditor) {
+        const g = project.editorGroups.find((x) => x.id === project.activeEditorGroupId);
+        return run(() => g?.activeTabId && st.moveEditorTab(project.id, g.activeTabId, "new"));
+      }
       if (k === "b") return run(() => st.updateProject(project.id, { sidebarOpen: !project.sidebarOpen }));
       if (k === "g" && e.shiftKey)
         return run(() => st.updateProject(project.id, { sidebarOpen: !(project.sidebarOpen && project.sidebarTab === "git"), sidebarTab: "git" }));
       if (k === "e" && e.shiftKey)
         return run(() => st.updateProject(project.id, { sidebarOpen: !(project.sidebarOpen && project.sidebarTab === "files"), sidebarTab: "files" }));
-      if (k === "k") return run(() => project.focusedPaneId && terminals.clear(project.focusedPaneId));
+      if (k === "k" && !inEditor) return run(() => project.focusedPaneId && terminals.clear(project.focusedPaneId));
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);

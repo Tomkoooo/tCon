@@ -10,48 +10,58 @@ import { oneDark } from "@codemirror/theme-one-dark";
 import MarkdownIt from "markdown-it";
 import { api } from "../../api";
 import type { FsChangedEvent } from "../../types";
+import { useWorkspace } from "../../store/workspace";
+import { useIsDark } from "../../theme";
+import { FileIcon } from "../FileIcon";
+import { editorSavers } from "./editorActions";
 import { isMarkdownPath, languageFor } from "./languages";
 import "./editor.css";
 
 export interface EditorPaneProps {
+  tabId: string;
   path: string;
-  onClose(): void;
-  diff?: { root: string; file: string | null; staged: boolean };
+  root: string;
+  diff?: { file: string | null; staged: boolean } | null;
 }
 
 export function EditorPane(props: EditorPaneProps) {
   if (props.diff) {
     const d = props.diff;
-    return <DiffView key={`${d.root}|${d.file ?? ""}|${d.staged}`} root={d.root} file={d.file} staged={d.staged} onClose={props.onClose} />;
+    return <DiffView key={`${props.root}|${d.file ?? ""}|${d.staged}`} root={props.root} file={d.file} staged={d.staged} />;
   }
   // Keyed by path: a path change fully remounts (and destroys the old EditorView).
-  return <FileEditor key={props.path} path={props.path} onClose={props.onClose} />;
+  return <FileEditor key={props.path} tabId={props.tabId} path={props.path} root={props.root} />;
+}
+
+/** VS Code-style breadcrumb: path relative to the project root. */
+function Breadcrumb({ path, root, children }: { path: string; root: string; children?: React.ReactNode }) {
+  const rel = path === root ? root.slice(root.lastIndexOf("/") + 1) : path.startsWith(root + "/") ? path.slice(root.length + 1) : path;
+  const parts = rel.split("/").filter(Boolean);
+  return (
+    <div className="ed-header">
+      <div className="ed-crumbs" title={path}>
+        {parts.map((part, i) => (
+          <span key={i} className="ed-crumb">
+            {i === parts.length - 1 && <FileIcon name={part} size={14} />}
+            <span className={i === parts.length - 1 ? "ed-crumb-last" : undefined}>{part}</span>
+            {i < parts.length - 1 && <span className="ed-crumb-sep">›</span>}
+          </span>
+        ))}
+      </div>
+      <span className="ed-spacer" />
+      {children}
+    </div>
+  );
 }
 
 /* ------------------------------------------------------------------ helpers */
 
 const trimSlash = (p: string) => (p.length > 1 && p.endsWith("/") ? p.replace(/\/+$/, "") : p);
-const baseName = (p: string) => p.slice(p.lastIndexOf("/") + 1);
 
 function formatSize(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
-}
-
-const darkQuery = (): MediaQueryList | null =>
-  typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
-
-function usePrefersDark(): boolean {
-  const [dark, setDark] = useState(() => darkQuery()?.matches ?? true);
-  useEffect(() => {
-    const mq = darkQuery();
-    if (!mq) return;
-    const on = (e: MediaQueryListEvent) => setDark(e.matches);
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, []);
-  return dark;
 }
 
 const baseTheme = EditorView.theme({
@@ -98,15 +108,15 @@ type LoadState =
 
 type MdMode = "edit" | "split" | "preview";
 
-function FileEditor({ path, onClose }: { path: string; onClose(): void }) {
+function FileEditor({ tabId, path, root }: { tabId: string; path: string; root: string }) {
   const isMd = isMarkdownPath(path);
-  const dark = usePrefersDark();
+  const dark = useIsDark();
+  const setEditorDirty = useWorkspace((s) => s.setEditorDirty);
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [diskChanged, setDiskChanged] = useState(false);
-  const [confirmClose, setConfirmClose] = useState(false);
   const [mdMode, setMdMode] = useState<MdMode>("split");
   const [previewSrc, setPreviewSrc] = useState("");
 
@@ -142,6 +152,16 @@ function FileEditor({ path, onClose }: { path: string; onClose(): void }) {
   const saveRef = useRef(save);
   saveRef.current = save;
 
+  // Expose save to tab-close prompts; mirror dirty state into the store (tab dot, pinning).
+  useEffect(() => {
+    const fn = () => saveRef.current();
+    editorSavers.set(tabId, fn);
+    return () => {
+      if (editorSavers.get(tabId) === fn) editorSavers.delete(tabId);
+    };
+  }, [tabId]);
+  useEffect(() => setEditorDirty(tabId, dirty), [tabId, dirty, setEditorDirty]);
+
   // Create the editor once the file is loaded; destroy it on unmount.
   useEffect(() => {
     let cancelled = false;
@@ -174,6 +194,8 @@ function FileEditor({ path, onClose }: { path: string; onClose(): void }) {
       savedDocRef.current = state.doc;
       viewRef.current?.destroy();
       viewRef.current = new EditorView({ state, parent: host });
+      const created = viewRef.current;
+      requestAnimationFrame(() => created.requestMeasure());
       setPreviewSrc(fc.content);
       setDirty(false);
       setLoad({ kind: "ready" });
@@ -242,21 +264,13 @@ function FileEditor({ path, onClose }: { path: string; onClose(): void }) {
     if (/^(https?:|mailto:)/i.test(href)) void openUrl(href).catch(() => {});
   };
 
-  const requestClose = () => {
-    if (dirty) setConfirmClose(true);
-    else onClose();
-  };
-
   const ready = load.kind === "ready";
   const showEditor = !isMd || mdMode !== "preview";
   const showPreview = isMd && mdMode !== "edit";
 
   return (
     <div className="ed-root">
-      <div className="ed-header">
-        <span className="ed-title" title={path}>{baseName(path)}</span>
-        {dirty && <span className="ed-dirty" title="Unsaved changes" />}
-        <span className="ed-spacer" />
+      <Breadcrumb path={path} root={root}>
         {isMd && ready && (
           <div className="ed-seg" role="group" aria-label="Markdown view mode">
             {(["edit", "split", "preview"] as const).map((m) => (
@@ -266,23 +280,9 @@ function FileEditor({ path, onClose }: { path: string; onClose(): void }) {
             ))}
           </div>
         )}
-        {ready && (
-          <button className="ed-btn" disabled={!dirty || saving} onClick={() => void save()} title="Save (⌘S)">
-            {saving ? "Saving…" : "Save"}
-          </button>
-        )}
-        <button className="ed-close" onClick={requestClose} title="Close">×</button>
-      </div>
+        {saving && <span className="ed-dim">Saving…</span>}
+      </Breadcrumb>
 
-      {confirmClose && (
-        <div className="ed-banner ed-banner-warn">
-          <span>Unsaved changes in {baseName(path)}.</span>
-          <span className="ed-spacer" />
-          <button className="ed-btn" onClick={() => { void save().then((ok) => { if (ok) onClose(); }); }}>Save</button>
-          <button className="ed-btn" onClick={onClose}>Discard</button>
-          <button className="ed-btn" onClick={() => setConfirmClose(false)}>Cancel</button>
-        </div>
-      )}
       {diskChanged && (
         <div className="ed-banner ed-banner-warn">
           <span>File changed on disk.</span>
@@ -332,7 +332,7 @@ function lineClass(line: string): string {
   return "";
 }
 
-function DiffView({ root, file, staged, onClose }: { root: string; file: string | null; staged: boolean; onClose(): void }) {
+function DiffView({ root, file, staged }: { root: string; file: string | null; staged: boolean }) {
   const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -371,18 +371,12 @@ function DiffView({ root, file, staged, onClose }: { root: string; file: string 
   }, [text]);
   const shown = lines.length > MAX_DIFF_LINES ? lines.slice(0, MAX_DIFF_LINES) : lines;
 
-  const title = file ?? "all files";
   return (
     <div className="ed-root">
-      <div className="ed-header">
-        <span className="ed-title" title={`${root}/${file ?? ""}`}>
-          <span className="ed-dim">diff:</span> {file ? baseName(file) : title}{" "}
-          <span className="ed-dim">({staged ? "staged" : "working"})</span>
-        </span>
-        <span className="ed-spacer" />
+      <Breadcrumb path={file ? `${root}/${file}` : root} root={root}>
+        <span className="ed-dim">{file ? "" : "all files · "}{staged ? "staged" : "working tree"}</span>
         <button className="ed-btn" onClick={load} title="Reload diff">Reload</button>
-        <button className="ed-close" onClick={onClose} title="Close">×</button>
-      </div>
+      </Breadcrumb>
       <div className="ed-body">
         {error && <div className="ed-message ed-message-error">{error}</div>}
         {!error && text === null && <div className="ed-message">Loading…</div>}

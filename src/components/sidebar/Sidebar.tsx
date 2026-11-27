@@ -10,12 +10,11 @@ export interface SidebarProps {
   root: string;
   gitStatus?: GitStatus | null;
   tab: SidebarTab;
-  onTabChange(tab: SidebarTab): void;
-  onOpenFile(path: string): void;
+  onOpenFile(path: string, preview: boolean): void;
   onOpenDiff?(file: string | null, staged: boolean): void;
 }
 
-export function Sidebar({ root, gitStatus, tab, onTabChange, onOpenFile, onOpenDiff }: SidebarProps) {
+export function Sidebar({ root, gitStatus, tab, onOpenFile, onOpenDiff }: SidebarProps) {
   // Keep a tab mounted once it has been shown so its state (expanded folders,
   // loaded log) survives tab switches.
   const [mounted, setMounted] = useState<Record<SidebarTab, boolean>>({ files: tab === "files", git: tab === "git" });
@@ -27,24 +26,9 @@ export function Sidebar({ root, gitStatus, tab, onTabChange, onOpenFile, onOpenD
 
   return (
     <div className="sb-root">
-      <div className="sb-tabs" role="tablist">
-        <button
-          role="tab"
-          aria-selected={tab === "files"}
-          className={`sb-tab${tab === "files" ? " sb-tab-active" : ""}`}
-          onClick={() => onTabChange("files")}
-        >
-          Files
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab === "git"}
-          className={`sb-tab${tab === "git" ? " sb-tab-active" : ""}`}
-          onClick={() => onTabChange("git")}
-        >
-          Git
-          {changeCount > 0 && <span className="sb-count">{changeCount}</span>}
-        </button>
+      <div className="sb-title">
+        {tab === "files" ? "Explorer" : "Source Control"}
+        {tab === "git" && changeCount > 0 && <span className="sb-count">{changeCount}</span>}
       </div>
       <div className="sb-content">
         {(mounted.files || tab === "files") && (

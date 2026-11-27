@@ -35,11 +35,24 @@ export interface Pane {
   exitCode?: number | null;
 }
 
-/** Split layout tree inside a project group. */
+/** Split layout tree inside a terminal tab. */
 export type LayoutNode =
   | { type: "terminal"; paneId: string }
-  | { type: "editor"; path: string; id: string }
   | { type: "split"; id: string; direction: "row" | "column"; children: LayoutNode[]; sizes: number[] };
+
+/** A tab in the terminal panel; holds one or more split terminals. */
+export interface TerminalTab { id: string; layout: LayoutNode }
+
+export interface EditorTab {
+  id: string;
+  path: string;
+  /** VS Code-style preview tab: replaced by the next single-click open until pinned. */
+  preview?: boolean;
+  diff?: { file: string | null; staged: boolean } | null;
+}
+export interface EditorGroup { id: string; tabs: EditorTab[]; activeTabId: string | null }
+
+export type PanelPosition = "bottom" | "top" | "left" | "right";
 
 export interface Project {
   id: string;
@@ -50,10 +63,23 @@ export interface Project {
   accountLabel?: string | null;
   lastInteracted: number;
   panes: Record<string, Pane>;
-  layout: LayoutNode | null;
+  terminalTabs: TerminalTab[];
+  activeTerminalTabId: string | null;
+  /** last focused terminal pane */
   focusedPaneId?: string | null;
+  editorGroups: EditorGroup[];
+  activeEditorGroupId: string | null;
+  editorGroupSizes: number[];
+  /** which area keyboard shortcuts like ⌘W apply to */
+  focusArea: "terminal" | "editor";
+  panelPosition: PanelPosition;
+  /** panel share of the workbench, in percent (when editors are open) */
+  panelSize: number;
+  panelMaximized: boolean;
+  panelHidden: boolean;
   sidebarOpen: boolean;
   sidebarTab: "files" | "git";
+  sidebarWidth: number;
 }
 
 export interface RecentPath { path: string; lastUsed: number; pinned: boolean }

@@ -4,12 +4,14 @@ import { listen } from "@tauri-apps/api/event";
 import { api } from "../../api";
 import type { FsChangedEvent, FsEntry, GitStatus } from "../../types";
 import { buildDecorIndex, lookupDecor, parentDir, trimSlash } from "./gitDecor";
+import { FileIcon } from "../FileIcon";
 import "./sidebar.css";
 
 export interface FileTreeProps {
   root: string;
   gitStatus?: GitStatus | null;
-  onOpenFile(path: string): void;
+  /** preview = single click (VS Code preview tab); false = pinned open */
+  onOpenFile(path: string, preview: boolean): void;
 }
 
 interface Row {
@@ -160,10 +162,10 @@ export function FileTree({ root: rawRoot, gitStatus, onOpenFile }: FileTreeProps
     });
   }, [root]);
 
-  const activate = useCallback((entry: FsEntry) => {
+  const activate = useCallback((entry: FsEntry, preview = true) => {
     setSelected(entry.path);
     if (entry.isDir) setExpanded(entry.path, !expanded.has(entry.path));
-    else onOpenFile(entry.path);
+    else onOpenFile(entry.path, preview);
   }, [expanded, onOpenFile, setExpanded]);
 
   const collapseAll = () => setExpandedByRoot((prev) => ({ ...prev, [root]: [] }));
@@ -207,7 +209,7 @@ export function FileTree({ root: rawRoot, gitStatus, onOpenFile }: FileTreeProps
         break;
       case "Enter":
         e.preventDefault();
-        if (cur) activate(cur.entry);
+        if (cur) activate(cur.entry, false);
         break;
     }
   };
@@ -258,6 +260,7 @@ export function FileTree({ root: rawRoot, gitStatus, onOpenFile }: FileTreeProps
                 style={{ paddingLeft: 6 + depth * ROW_INDENT }}
                 title={entry.path}
                 onClick={() => activate(entry)}
+                onDoubleClick={() => !entry.isDir && onOpenFile(entry.path, false)}
               >
                 <span className="sb-twisty">
                   {entry.isDir && (
@@ -266,6 +269,7 @@ export function FileTree({ root: rawRoot, gitStatus, onOpenFile }: FileTreeProps
                     </svg>
                   )}
                 </span>
+                <FileIcon name={entry.name} dir={entry.isDir} open={isOpen} />
                 <span className={`sb-name${entry.name.startsWith(".") ? " sb-dim" : ""}${entry.isSymlink ? " sb-symlink" : ""}`}>
                   {entry.name}
                 </span>
