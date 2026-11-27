@@ -6,6 +6,7 @@ import type {
 import { equal, insertPane, paneIds, removePane, sanitize, setSizes, uid } from "./layout";
 import { terminals } from "../terminal/registry";
 import { accountEnv, useAccounts } from "./accounts";
+import { withClaudeModel } from "../claudeModel";
 
 export const PALETTE = ["#6aa7ff", "#5fc48a", "#e5b450", "#ef5f5f", "#b884f0", "#4fc6c6", "#f08a4b", "#e57ab8", "#9aa3ad"];
 export const INACTIVE_AFTER_MS = 30 * 60 * 1000;
@@ -15,7 +16,7 @@ const MAX_EDITOR_GROUPS = 4;
 export type Modal =
   | null
   | { kind: "newProject" }
-  | { kind: "profiles" }
+  | { kind: "profiles"; section?: string } /* = Settings */
   | { kind: "projectSettings"; projectId: string };
 
 export interface OpenProjectArgs {
@@ -43,7 +44,7 @@ export interface AddTerminalOpts {
   ephemeral?: boolean;
 }
 
-type ProjectPatch = Partial<Pick<Project, "name" | "color" | "profileId" | "accountLabel" | "sidebarOpen" | "sidebarTab" | "sidebarWidth">>;
+type ProjectPatch = Partial<Pick<Project, "name" | "color" | "profileId" | "accountLabel" | "env" | "claudeModel" | "sidebarOpen" | "sidebarTab" | "sidebarWidth">>;
 
 interface WorkspaceState {
   loaded: boolean;
@@ -194,9 +195,9 @@ function makePane(cwd: string, claude: boolean, profileId?: string | null, comma
   };
 }
 
-/** Env for a pane: global Claude account < project/pane profile < pane-specific overrides. */
+/** Env for a pane: global Claude account < legacy project/pane profile < project env < pane-specific overrides. */
 export function paneEnv(profiles: Profile[], project: Project, pane: Pane): Record<string, string> {
-  return { ...accountEnv(), ...profileEnv(profiles, pane.profileId ?? project.profileId), ...(pane.env ?? {}) };
+  return { ...accountEnv(), ...profileEnv(profiles, pane.profileId ?? project.profileId), ...(project.env ?? {}), ...(pane.env ?? {}) };
 }
 
 const sameDiff = (a: EditorTab["diff"], b: EditorTab["diff"]) =>
@@ -225,7 +226,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     set((s) => (s.projects[id] ? { projects: { ...s.projects, [id]: fn(s.projects[id]) } } : s));
 
   const spawn = (project: Project, pane: Pane) => {
-    terminals.ensure(pane, paneEnv(get().profiles, project, pane));
+    terminals.ensure(withClaudeModel(project, pane), paneEnv(get().profiles, project, pane));
   };
 
   const dropStatuses = (ids: string[]) =>
@@ -516,7 +517,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       patchProject(project.id, (p) => ({ ...p, panes: { ...p.panes, [paneId]: { ...pane, exited: false, exitCode: null } } }));
       dropStatuses([paneId]);
       const run = command !== undefined ? { ...pane, startupCommand: command } : pane;
-      terminals.respawn(run, paneEnv(get().profiles, project, run));
+      terminals.respawn(withClaudeModel(project, run), paneEnv(get().profiles, project, run));
     },
 
     resizeSplit(projectId, splitId, sizes) {

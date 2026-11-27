@@ -55,7 +55,7 @@ export function TabBar() {
       </div>
       <div className="tabbar-actions">
         <AccountChip />
-        <button className="icon-btn" title="Accounts / profiles (⌘,)" onClick={() => setModal({ kind: "profiles" })}>⚙</button>
+        <button className="icon-btn" title="Settings (⌘,)" onClick={() => setModal({ kind: "profiles" })}>⚙</button>
       </div>
     </div>
   );

@@ -67,6 +67,10 @@ export interface Project {
   color: string;
   profileId?: string | null;
   accountLabel?: string | null;
+  /** extra env vars for every terminal in this project (overrides the account / legacy profile) */
+  env?: Record<string, string> | null;
+  /** Claude model override for new sessions (null = global "claude.model" setting) */
+  claudeModel?: string | null;
   lastInteracted: number;
   panes: Record<string, Pane>;
   terminalTabs: TerminalTab[];
