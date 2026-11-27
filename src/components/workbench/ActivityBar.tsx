@@ -4,6 +4,7 @@ import { useContextMenu } from "../ContextMenu";
 import { layoutMenuItems } from "./layoutMenu";
 import { useTasks } from "../../tasks/store";
 import { Icon } from "../icons";
+import "../../browser/store"; // subscribes to browser / dev-server events
 
 export function ActivityBar({ project }: { project: Project }) {
   const updateProject = useWorkspace((s) => s.updateProject);
@@ -33,6 +34,9 @@ export function ActivityBar({ project }: { project: Project }) {
             {openTasks > 99 ? "99+" : openTasks}
           </span>
         )}
+      </button>
+      <button className={`ab-btn${on("browser") ? " on" : ""}`} title="Browser (⇧⌘O opens a URL)" aria-label="Browser" onClick={() => toggle("browser")}>
+        <Icon name="globe" size={22} />
       </button>
       <span style={{ flex: 1 }} />
       <button className="ab-btn" title="Layout" aria-label="Layout" onClick={(e) => menu.open(e, layoutMenuItems(project.id))}>

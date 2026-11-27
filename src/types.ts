@@ -53,8 +53,8 @@ export interface EditorTab {
   /** VS Code-style preview tab: replaced by the next single-click open until pinned. */
   preview?: boolean;
   diff?: { file: string | null; staged: boolean } | null;
-  /** non-file editor: "board" = the project's task board (path is virtual) */
-  kind?: "board";
+  /** non-file editor: "board" = the project's task board (path is virtual), "browser" = a built-in browser page (path = its URL) */
+  kind?: "board" | "browser";
 }
 export interface EditorGroup { id: string; tabs: EditorTab[]; activeTabId: string | null }
 
@@ -71,6 +71,8 @@ export interface Project {
   env?: Record<string, string> | null;
   /** Claude model override for new sessions (null = global "claude.model" setting) */
   claudeModel?: string | null;
+  /** dev server URL for "Browser: Open Dev Server" (null = the last one a terminal printed) */
+  browserUrl?: string | null;
   lastInteracted: number;
   panes: Record<string, Pane>;
   terminalTabs: TerminalTab[];
@@ -88,7 +90,7 @@ export interface Project {
   panelMaximized: boolean;
   panelHidden: boolean;
   sidebarOpen: boolean;
-  sidebarTab: "files" | "git" | "tasks";
+  sidebarTab: "files" | "git" | "tasks" | "browser";
   sidebarWidth: number;
 }
 

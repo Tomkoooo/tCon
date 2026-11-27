@@ -44,7 +44,7 @@ export interface AddTerminalOpts {
   ephemeral?: boolean;
 }
 
-type ProjectPatch = Partial<Pick<Project, "name" | "color" | "profileId" | "accountLabel" | "env" | "claudeModel" | "sidebarOpen" | "sidebarTab" | "sidebarWidth">>;
+type ProjectPatch = Partial<Pick<Project, "name" | "color" | "profileId" | "accountLabel" | "env" | "claudeModel" | "browserUrl" | "sidebarOpen" | "sidebarTab" | "sidebarWidth">>;
 
 interface WorkspaceState {
   loaded: boolean;
@@ -87,6 +87,8 @@ interface WorkspaceState {
   closeEditorTab(projectId: string, tabId: string): void;
   setActiveEditorTab(projectId: string, groupId: string, tabId: string): void;
   pinEditorTab(projectId: string, tabId: string): void;
+  /** Change a tab's path in place (a browser tab follows its page's URL). */
+  setEditorTabPath(projectId: string, tabId: string, path: string): void;
   /** Move a tab into another group (or "new" = a new group right of its current one). */
   moveEditorTab(projectId: string, tabId: string, toGroupId: string | "new", toIndex?: number, anchorGroupId?: string): void;
   focusEditorGroup(projectId: string, groupId: string): void;
@@ -618,6 +620,16 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       patchProject(projectId, (p) => ({
         ...p,
         editorGroups: p.editorGroups.map((g) => (g.tabs.some((t) => t.id === tabId && t.preview) ? { ...g, tabs: g.tabs.map((t) => (t.id === tabId ? { ...t, preview: false } : t)) } : g)),
+      }));
+    },
+
+    setEditorTabPath(projectId, tabId, path) {
+      const p = get().projects[projectId];
+      const found = p && findEditorTab(p, tabId);
+      if (!found || found[1].path === path) return;
+      patchProject(projectId, (pr) => ({
+        ...pr,
+        editorGroups: pr.editorGroups.map((g) => (g.tabs.some((t) => t.id === tabId) ? { ...g, tabs: g.tabs.map((t) => (t.id === tabId ? { ...t, path } : t)) } : g)),
       }));
     },
 

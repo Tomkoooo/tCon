@@ -6,6 +6,7 @@ import { closeEditors } from "./components/editor/editorActions";
 import { useTheming } from "./theming/store";
 import { refreshWorkspace } from "./refresh";
 import { openBoard, quickAddTask, showTasksView } from "./tasks/actions";
+import { openDevServer, promptOpenUrl, toggleBrowserView } from "./browser/actions";
 
 export interface Keybinding { key: string; command: string; when?: string; args?: unknown }
 
@@ -112,6 +113,9 @@ export const COMMANDS: Command[] = [
   { id: "tasks.quickAdd", title: "Tasks: Quick Add", run: quickAddTask },
   { id: "tasks.openBoard", title: "Tasks: Open Board", run: () => openBoard() },
   { id: "tasks.showView", title: "Tasks: Show Tasks View", run: () => showTasksView() },
+  { id: "browser.openUrl", title: "Browser: Open URL…", run: promptOpenUrl },
+  { id: "browser.openDevServer", title: "Browser: Open Dev Server", run: () => openDevServer() },
+  { id: "browser.showView", title: "Browser: Show Browser View", run: toggleBrowserView },
 ];
 
 export const COMMAND_MAP = new Map(COMMANDS.map((c) => [c.id, c]));
@@ -147,6 +151,7 @@ export const DEFAULT_KEYBINDINGS: Keybinding[] = [
   { key: "cmd+shift+g", command: "workbench.view.scm" },
   { key: "cmd+shift+a", command: "tasks.quickAdd" },
   { key: "cmd+shift+b", command: "tasks.openBoard" },
+  { key: "cmd+shift+o", command: "browser.openUrl" },
 ];
 
 // ---------------- key normalization ----------------
