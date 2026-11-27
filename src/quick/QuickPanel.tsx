@@ -65,6 +65,22 @@ const api = {
   update: (root: string, id: string, patch: { priority?: string; labels?: string[] }) => invoke<Task>("task_update", { root, id, patch }),
   hide: () => invoke<void>("quick_hide"),
   open: (root: string, taskId: string | null) => invoke<void>("quick_open", { root, taskId }),
+  startDrag: () => invoke<void>("quick_start_drag"),
+  resetPosition: () => invoke<void>("quick_reset_position"),
+};
+
+/** Drag the window by empty space in the header (not by its buttons). Double-click re-centres it. */
+const dragProps = {
+  onMouseDown: (e: React.MouseEvent) => {
+    if (e.button !== 0 || e.detail > 1) return;
+    if ((e.target as HTMLElement).closest("button, input, textarea, a")) return;
+    e.preventDefault();
+    void api.startDrag().catch(() => {});
+  },
+  onDoubleClick: (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest("button, input, textarea, a")) return;
+    void api.resetPosition().catch(() => {});
+  },
 };
 
 /** Boards read this session, per root: shown instantly when switching back. */
@@ -282,7 +298,8 @@ export function QuickPanel() {
 
   return (
     <div className="qp">
-      <div className="qp-projects" ref={chipsRef} role="tablist" aria-label="Project">
+      <div className="qp-grip" title="Drag to move · double-click to re-centre" {...dragProps}><span /></div>
+      <div className="qp-projects" ref={chipsRef} role="tablist" aria-label="Project" {...dragProps}>
         {projects.length === 0 && <span className="qp-dim">No projects yet. Open one in tCon first.</span>}
         {projects.map((p, i) => (
           <button
@@ -394,7 +411,7 @@ export function QuickPanel() {
           )}
       </div>
 
-      <footer className="qp-foot">
+      <footer className="qp-foot" {...dragProps}>
         <span><kbd>↵</kbd> Inbox</span>
         <span><kbd>{MOD}↵</kbd> Todo</span>
         <span><kbd>⇧↵</kbd> Description</span>

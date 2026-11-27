@@ -10,6 +10,7 @@ import "@xterm/xterm/css/xterm.css";
 import { api } from "../api";
 import type { Pane } from "../types";
 import { useWorkspace } from "../store/workspace";
+import { pathsForTerminal } from "./quotePath";
 
 interface Entry {
   term: Terminal;
@@ -103,6 +104,26 @@ class TerminalRegistry {
       return true;
     });
 
+    // Files copied in Finder: the browser only sees their names, so paste their full paths.
+    host.addEventListener(
+      "paste",
+      (ev) => {
+        const types = ev.clipboardData?.types ?? [];
+        if (!types.includes("Files")) return;
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        const fallback = ev.clipboardData?.getData("text/plain") ?? "";
+        void api
+          .clipboardFilePaths()
+          .catch(() => [] as string[])
+          .then((paths) => {
+            const text = paths.length ? pathsForTerminal(paths) : fallback;
+            if (text) term.paste(text);
+          });
+      },
+      true,
+    );
+
     term.onData((data) => {
       void api.ptyWrite(pane.id, data);
       useWorkspace.getState().markActivity(pane.id);
@@ -195,6 +216,14 @@ class TerminalRegistry {
 
   focus(paneId: string) {
     this.entries.get(paneId)?.term.focus();
+  }
+
+  /** Paste text as if typed via the clipboard (bracketed paste when the program asks for it). */
+  paste(paneId: string, text: string): boolean {
+    const e = this.entries.get(paneId);
+    if (!e) return false;
+    e.term.paste(text);
+    return true;
   }
 
   clear(paneId: string) {

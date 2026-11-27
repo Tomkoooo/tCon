@@ -37,6 +37,8 @@ export interface Pane {
   env?: Record<string, string>;
   /** not persisted across app restarts (e.g. login terminals) */
   ephemeral?: boolean;
+  /** Claude Code session running in this pane (recorded by the SessionStart hook) */
+  sessionId?: string;
 }
 
 /** Split layout tree inside a terminal tab. */

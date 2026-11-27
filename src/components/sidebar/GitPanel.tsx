@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { SUBJECT_PLAIN, SUBJECT_WITH_REFS, shortSubject } from "./refText";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ask } from "@tauri-apps/plugin-dialog";
 import type { ReactNode } from "react";
@@ -109,15 +110,6 @@ const GraphCell = memo(function GraphCell({ row, lanes, sync, head }: { row: Gra
     </svg>
   );
 });
-
-/** Graph rows show a short subject (the hover card has the full message), so ref badges stay visible. */
-const SUBJECT_MAX = 40;
-function shortSubject(summary: string): string {
-  if (summary.length <= SUBJECT_MAX) return summary;
-  const cut = summary.slice(0, SUBJECT_MAX);
-  const space = cut.lastIndexOf(" ");
-  return `${(space > SUBJECT_MAX * 0.6 ? cut.slice(0, space) : cut).replace(/[\s,.:;(-]+$/, "")}…`;
-}
 
 const relPath = (file: GitFileStatus) => trimSlash(file.path.includes(" -> ") ? file.path.split(" -> ")[1] : file.path);
 
@@ -682,7 +674,7 @@ export function GitPanel({ root: rawRoot, gitStatus, onOpenDiff, onOpenFile }: G
                   onDoubleClick={() => commitActions.openChanges(c)}
                 >
                   <GraphCell row={row} lanes={graphLanes} sync={c.sync} head={isHead} />
-                  <span className="sb-graph-summary">{shortSubject(c.summary)}</span>
+                  <span className="sb-graph-summary">{shortSubject(c.summary, pills.length ? SUBJECT_WITH_REFS : SUBJECT_PLAIN)}</span>
                   {pills.length > 0 && <RefPills pills={pills} color={row.color} />}
                   {c.sync === "outgoing" && <span className="sb-sync-badge" title={SYNC_NOTE.outgoing}><Icon name="arrowUp" size={12} /></span>}
                   {c.sync === "incoming" && <span className="sb-sync-badge" title={SYNC_NOTE.incoming}><Icon name="arrowDown" size={12} /></span>}

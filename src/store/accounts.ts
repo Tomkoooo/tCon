@@ -5,7 +5,8 @@ import { create } from "zustand";
 import { message } from "@tauri-apps/plugin-dialog";
 import { api } from "../api";
 import type { Account, AuthStatus } from "../types";
-import { profileEnv, useWorkspace } from "./workspace";
+import { findPane, profileEnv, useWorkspace } from "./workspace";
+import { isSessionId, resumeCommand, sessionsApi } from "../claudeSessions";
 
 export const DEFAULT_ACCOUNT: Account = { id: "default", configDir: null };
 
@@ -115,9 +116,10 @@ export const useAccounts = create<AccountsState>((set, get) => ({
 
   async setActive(id, { promptRestart = true } = {}) {
     if (!get().accounts.some((a) => a.id === id) || get().activeId === id) return;
+    const prevConfig = get().accounts.find((a) => a.id === get().activeId)?.configDir ?? null;
     set({ activeId: id });
     persist(get().accounts, id);
-    if (promptRestart) await offerRestart(id);
+    if (promptRestart) await offerRestart(id, prevConfig);
   },
 
   async add() {
@@ -200,38 +202,71 @@ export const useAccounts = create<AccountsState>((set, get) => ({
 }));
 
 /** After switching: restart idle Claude sessions so they pick up the new login. */
-async function offerRestart(accountId: string) {
+/** Move a pane's Claude session to the active account and restart it there. Sessions with a
+ *  recorded id resume exactly (the transcript is copied into the new config dir first); the
+ *  rest fall back to `claude --continue`, once per directory. */
+async function restartOnActiveAccount(paneId: string, prevConfig: string | null, continued: Set<string>) {
   const ws = useWorkspace.getState();
-  const candidates: { paneId: string; cwd: string }[] = [];
-  let busy = 0;
+  const found = findPane(ws, paneId);
+  if (!found) return;
+  const pane = found[1];
+  const newConfig = accountEnv().CLAUDE_CONFIG_DIR ?? null;
+  if (isSessionId(pane.sessionId)) {
+    const ok = await sessionsApi.copy(prevConfig, newConfig, pane.cwd, pane.sessionId).catch(() => false);
+    if (ok) return ws.restartPane(paneId, resumeCommand(pane.sessionId));
+  }
+  const cmd = continued.has(pane.cwd) ? "claude" : "claude --continue";
+  continued.add(pane.cwd);
+  ws.restartPane(paneId, cmd);
+}
+
+/** Busy panes that move to the new account as soon as they're idle. */
+const pendingSwitch = new Map<string, string | null>();
+let pendingOff: (() => void) | null = null;
+function switchWhenIdle(paneIds: string[], prevConfig: string | null) {
+  paneIds.forEach((id) => pendingSwitch.set(id, prevConfig));
+  if (pendingOff) return;
+  pendingOff = useWorkspace.subscribe((s) => {
+    for (const [id, prev] of [...pendingSwitch]) {
+      const st = s.statuses[id]?.state;
+      if (!findPane(s, id)) pendingSwitch.delete(id);
+      else if (st !== "working" && st !== "blocked") {
+        pendingSwitch.delete(id);
+        void restartOnActiveAccount(id, prev, new Set());
+      }
+    }
+    if (!pendingSwitch.size) {
+      pendingOff?.();
+      pendingOff = null;
+    }
+  });
+}
+
+async function offerRestart(accountId: string, prevConfig: string | null) {
+  const ws = useWorkspace.getState();
+  const candidates: string[] = [];
+  const busy: string[] = [];
   for (const p of Object.values(ws.projects)) {
     for (const pane of Object.values(p.panes)) {
       if (pane.ephemeral || pane.exited || !pane.isClaude || !pane.startupCommand?.trim().startsWith("claude")) continue;
       // A project/pane profile with its own CLAUDE_CONFIG_DIR isn't affected by the global account.
       if (profileEnv(ws.profiles, pane.profileId ?? p.profileId).CLAUDE_CONFIG_DIR || p.env?.CLAUDE_CONFIG_DIR) continue;
       const state = ws.statuses[pane.id]?.state;
-      if (state === "working" || state === "blocked") busy++;
-      else candidates.push({ paneId: pane.id, cwd: pane.cwd });
+      if (state === "working" || state === "blocked") busy.push(pane.id);
+      else candidates.push(pane.id);
     }
   }
-  if (!candidates.length && !busy) return;
+  if (!candidates.length && !busy.length) return;
   const name = accountLabel(useAccounts.getState().accounts.find((a) => a.id === accountId)!, useAccounts.getState().status[accountId]);
+  const total = candidates.length + busy.length;
   const parts = [
     `Running Claude sessions still use the previous account.`,
-    candidates.length ? `Restart ${candidates.length} idle session${candidates.length > 1 ? "s" : ""} on ${name}? Each resumes its last conversation (claude --continue).` : "",
-    busy ? `${busy} busy session${busy > 1 ? "s are" : " is"} left alone — restart ${busy > 1 ? "them" : "it"} when finished.` : "",
+    `Move ${total} session${total > 1 ? "s" : ""} to ${name}? Each one continues its own conversation on the new account.`,
+    busy.length ? `${busy.length} busy session${busy.length > 1 ? "s move" : " moves"} as soon as ${busy.length > 1 ? "they finish their" : "it finishes its"} current turn.` : "",
   ].filter(Boolean);
-  if (!candidates.length) {
-    await message(parts.join("\n\n"), { title: "Account switched", kind: "info" });
-    return;
-  }
-  const answer = await message(parts.join("\n\n"), { title: "Account switched", kind: "info", buttons: { ok: "Restart sessions", cancel: "Later" } });
-  if (answer !== "Ok" && answer !== "Restart sessions") return;
-  // `--continue` resumes the latest conversation per directory: only once per cwd.
+  const answer = await message(parts.join("\n\n"), { title: "Account switched", kind: "info", buttons: { ok: "Move sessions", cancel: "Later" } });
+  if (answer !== "Ok" && answer !== "Move sessions") return;
   const continued = new Set<string>();
-  for (const c of candidates) {
-    const cmd = continued.has(c.cwd) ? "claude" : "claude --continue";
-    continued.add(c.cwd);
-    ws.restartPane(c.paneId, cmd);
-  }
+  for (const id of candidates) await restartOnActiveAccount(id, prevConfig, continued);
+  if (busy.length) switchWhenIdle(busy, prevConfig);
 }

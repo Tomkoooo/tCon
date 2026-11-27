@@ -35,6 +35,14 @@ struct CwdEvent {
     cwd: String,
 }
 
+/// Claude Code printed its usage-limit message in the pane.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct LimitEvent {
+    pane_id: String,
+    hit: crate::limits::LimitHit,
+}
+
 /// A local dev-server URL printed by the pane (for the Browser view).
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -87,6 +95,8 @@ impl PtyManager {
         cmd.env("TERM_PROGRAM_VERSION", env!("CARGO_PKG_VERSION"));
         cmd.env("LANG", std::env::var("LANG").unwrap_or_else(|_| "en_US.UTF-8".into()));
         cmd.env_remove("CLAUDECODE"); // don't let nested sessions think they're inside Claude
+        // Lets the SessionStart hook tCon passes to Claude record which pane a session runs in.
+        cmd.env("TCON_PANE_ID", &opts.pane_id);
         // tCon's own launch/build variables (TAURI_*, npm_*, signing secrets) stay out of shells.
         for k in crate::security::inherited_vars_to_strip() {
             cmd.env_remove(k);
@@ -113,6 +123,7 @@ impl PtyManager {
         std::thread::Builder::new().name(format!("pty-{pane_id}")).spawn(move || {
             let mut filter = OscFilter::new();
             let mut dev_urls = crate::browser::devurl::DevUrlScanner::default();
+            let mut limits = crate::limits::LimitScanner::default();
             let mut buf = vec![0u8; 64 * 1024];
             let mut events = Vec::new();
             loop {
@@ -135,6 +146,9 @@ impl PtyManager {
                                     let _ = app.emit("pane-cwd", CwdEvent { pane_id: pane_id.clone(), cwd });
                                 }
                             }
+                        }
+                        if let Some(hit) = limits.feed(&out) {
+                            let _ = app.emit_to("main", "pane-limit", LimitEvent { pane_id: pane_id.clone(), hit });
                         }
                         for url in dev_urls.feed(&out) {
                             let _ = app.emit_to("main", "dev-server", DevServerEvent { pane_id: pane_id.clone(), url });

@@ -2,14 +2,15 @@
 // with drag & drop. Built for jotting things down fast during a meeting.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useBoard, useTasks } from "../../tasks/store";
-import { installSkill, openAgentTerminal, projectForRoot, startAgent, stopAgent, livePane } from "../../tasks/agent";
+import { installSkill, openAgentTerminal, planTasks, projectForRoot, resumeAgent, resumeQueue, startAgent, stopAfterCurrent, stopAgent, livePane } from "../../tasks/agent";
 import { openBoard, quickAddTask } from "../../tasks/actions";
-import { PRIORITIES, type BoardState, type Task } from "../../tasks/types";
+import { DEFAULT_SETTINGS, PRIORITIES, type AutoPickup, type BoardState, type Task } from "../../tasks/types";
 import { useContextMenu, type MenuItem } from "../ContextMenu";
 import {
   AgentChip, ClaudeMark, PriorityIcon, StatusIcon, TASK_DRAG, adjustedIndex, dropIndexFor, readDrag, useAgentView, type DragPayload,
 } from "./parts";
 import { Icon } from "../icons";
+import { BulkBar } from "./BulkBar";
 import "./tasks.css";
 
 const COLLAPSE_KEY = "tcon.tasks.collapsed";
@@ -23,13 +24,23 @@ function loadCollapsed(): Record<string, boolean> {
 
 // ---------------- shared menus ----------------
 
-/** Board settings menu (sidebar title, board header). The board header has its own
- *  "Auto-pickup" toggle, so `inBoard` leaves that item out. */
+/** Board settings menu (sidebar title, board header). The board header has its own run
+ *  queue panel, so `inBoard` leaves the queue items out. */
 export function boardMenuItems(root: string, state: BoardState | null, opts: { inBoard?: boolean } = {}): MenuItem[] {
   const st = useTasks.getState();
-  const s = state?.board.settings ?? { askOnTodo: false, maxAgents: 1, shared: false };
+  const s = state?.board.settings ?? DEFAULT_SETTINGS;
+  const pickup: [AutoPickup, string][] = [["off", "Do Nothing"], ["ask", "Ask to Start Claude"], ["auto", "Queue for Claude Automatically"]];
   return [
-    ...(opts.inBoard ? [] : [{ label: "Ask to Start Claude on New Todo Tasks", checked: s.askOnTodo, action: () => void st.saveSettings(root, { askOnTodo: !s.askOnTodo }) }, "sep" as const]),
+    ...(opts.inBoard ? [] : [
+      { header: "When a task enters Todo" },
+      ...pickup.map(([v, label]) => ({ label, checked: s.autoPickup === v, action: () => void st.saveSettings(root, { autoPickup: v }) })),
+      { label: "Plan New Inbox Cards with Claude", checked: s.inboxAutoPlan, action: () => void st.saveSettings(root, { inboxAutoPlan: !s.inboxAutoPlan }) },
+      "sep" as const,
+      s.paused
+        ? { label: "Resume Queue", action: () => void resumeQueue(root) }
+        : { label: "Stop Queue After Current Tasks", action: () => void stopAfterCurrent(root) },
+      "sep" as const,
+    ]),
     { header: "Concurrent agents" },
     ...[1, 2, 3, 4].map((n) => ({
       label: `${n} at a time`,
@@ -51,6 +62,8 @@ export function boardMenuItems(root: string, state: BoardState | null, opts: { i
           .then((paths) => st.setNotice(`Installed the tcon-tasks skill (${paths.length} location${paths.length === 1 ? "" : "s"}).`))
           .catch((e) => st.setNotice(`Couldn't install the skill: ${e}`, true)),
     },
+    { label: "Import Notes as Tasks…", title: "Paste notes; Claude splits them into Inbox cards", action: () => st.setImportOpen(true) },
+    { label: "Plan Inbox with Claude", title: "Plan every Inbox card and move it to Todo, without changing code", action: () => void planTasks(root, state?.columns.inbox ?? []) },
     { label: "Reload Tasks", checked: false, action: () => void st.load(root) },
   ];
 }
@@ -59,12 +72,19 @@ export function boardMenuItems(root: string, state: BoardState | null, opts: { i
 export function taskMenuItems(root: string, task: Task, state: BoardState | null, extra: { open?: () => void } = {}): MenuItem[] {
   const st = useTasks.getState();
   const alive = !!livePane(task);
-  const running = task.agent === "running" || task.agent === "blocked" || task.agent === "queued";
+  const running = task.agent === "running" || task.agent === "blocked" || task.agent === "queued" || task.agent === "planning";
   const items: MenuItem[] = [];
   if (extra.open) items.push({ label: "Open", hint: "↵", action: extra.open });
   items.push(running && (alive || task.agent === "queued")
-    ? { label: task.agent === "queued" ? "Remove from Agent Queue" : "Stop Agent", action: () => void stopAgent(root, task.id) }
+    ? { label: task.agent === "queued" ? "Remove from Agent Queue" : task.agent === "planning" ? "Stop Planner" : "Stop Agent", action: () => void stopAgent(root, task.id) }
     : { label: "Let Claude Work on This", action: () => void startAgent(root, task.id) });
+  if (task.agent === "interrupted" || task.agent === "limited") {
+    items.push(
+      { label: "Resume Agent", title: "Continue the agent's Claude session where it stopped", action: () => void resumeAgent(root, task.id, "Resumed by user") },
+      { label: "Discard Agent Session", action: () => void st.update(root, task.id, { agent: "idle", paneId: "", log: "Agent session discarded by user" }) },
+    );
+  }
+  if (!running && task.status !== "done") items.push({ label: "Plan with Claude", title: "Write a plan and move it to Todo, without changing code", action: () => void planTasks(root, [task.id]) });
   if (alive) items.push({ label: "Open Agent Terminal", action: () => openAgentTerminal(root, task.id) });
   items.push("sep");
   for (const c of state?.board.columns ?? []) {
@@ -126,7 +146,7 @@ export function QuickCapture({ root, column = "inbox", autoFocusAt }: { root: st
     setDetails("");
     setShowDetails(false);
     titleRef.current?.focus();
-    const created = await useTasks.getState().create(root, t, details, target);
+    const created = await useTasks.getState().capture(root, t, details, target);
     if (created) {
       setFlash(`${created.id} added`);
       window.setTimeout(() => setFlash(null), 1400);
@@ -139,7 +159,7 @@ export function QuickCapture({ root, column = "inbox", autoFocusAt }: { root: st
         <input
           ref={titleRef}
           className="tk-capture-input"
-          placeholder="Add a task"
+          placeholder="Add a task  (#label !high)"
           value={title}
           spellCheck
           onChange={(e) => setTitle(e.target.value)}
@@ -209,8 +229,34 @@ export function TasksView({ root }: { root: string }) {
   const notice = useTasks((s) => s.notice);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(loadCollapsed);
   const [drop, setDrop] = useState<{ column: string; index: number } | null>(null);
+  const [picked, setPicked] = useState<Set<string>>(() => new Set());
+  const [anchor, setAnchor] = useState<string | null>(null);
   const menu = useContextMenu();
   const project = projectForRoot(root);
+
+  /** ⌘/Ctrl-click toggles, ⇧-click selects a range in the column, a plain click opens. */
+  const clickRow = (e: React.MouseEvent, colId: string, id: string) => {
+    if (e.metaKey || e.ctrlKey) {
+      setPicked((p) => {
+        const next = new Set(p);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+      setAnchor(id);
+      return;
+    }
+    const ids = state?.columns[colId] ?? [];
+    if (e.shiftKey && anchor && ids.includes(anchor)) {
+      const a = ids.indexOf(anchor);
+      const b = ids.indexOf(id);
+      setPicked(new Set(ids.slice(Math.min(a, b), Math.max(a, b) + 1)));
+      return;
+    }
+    setPicked(new Set());
+    setAnchor(id);
+    open(id);
+  };
 
   useEffect(() => {
     try {
@@ -281,7 +327,8 @@ export function TasksView({ root }: { root: string }) {
                     dropAfter={drop?.column === col.id && drop.index === i + 1 && i === ids.length - 1}
                     onDragOverRow={(index) => setDrop({ column: col.id, index })}
                     onDropRow={(e, index) => onDrop(e, col.id, index)}
-                    onOpen={() => open(id)}
+                    picked={picked.has(id)}
+                    onClickRow={(e) => clickRow(e, col.id, id)}
                     onMenu={(e) => menu.open(e, taskMenuItems(root, t, state, { open: () => open(id) }))}
                   />
                 );
@@ -290,6 +337,7 @@ export function TasksView({ root }: { root: string }) {
           );
         })}
       </div>
+      {state && picked.size > 0 && <BulkBar compact root={root} state={state} ids={[...picked].filter((id) => byId.has(id))} onClear={() => setPicked(new Set())} />}
       {menu.element}
     </div>
   );
@@ -304,16 +352,17 @@ function TaskRow(props: {
   dropAfter: boolean;
   onDragOverRow(index: number): void;
   onDropRow(e: React.DragEvent, index: number): void;
-  onOpen(): void;
+  picked: boolean;
+  onClickRow(e: React.MouseEvent): void;
   onMenu(e: React.MouseEvent): void;
 }) {
   const { root, task, column, index } = props;
   const view = useAgentView(task);
   const [dragging, setDragging] = useState(false);
-  const active = view.kind === "working" || view.kind === "blocked" || view.kind === "queued" || view.kind === "waiting";
+  const active = ["working", "blocked", "queued", "waiting", "planning", "interrupted", "limited"].includes(view.kind);
   return (
     <div
-      className={`tk-row${props.dropBefore ? " tk-drop-before" : ""}${props.dropAfter ? " tk-drop-after" : ""}${dragging ? " tk-dragging" : ""}${task.status === "done" ? " tk-row-done" : ""}`}
+      className={`tk-row${props.picked ? " tk-picked" : ""}${props.dropBefore ? " tk-drop-before" : ""}${props.dropAfter ? " tk-drop-after" : ""}${dragging ? " tk-dragging" : ""}${task.status === "done" ? " tk-row-done" : ""}`}
       title={`${task.id} · ${task.title}${task.description ? `\n\n${task.description.slice(0, 300)}` : ""}`}
       draggable
       onDragStart={(e) => {
@@ -333,7 +382,8 @@ function TaskRow(props: {
         e.stopPropagation();
         props.onDropRow(e, dropIndexFor(e, e.currentTarget, index));
       }}
-      onClick={props.onOpen}
+      onClick={props.onClickRow}
+      onKeyDown={(e) => e.key === "Escape" && e.currentTarget.blur()}
       onContextMenu={props.onMenu}
     >
       <PriorityIcon priority={task.priority} size={12} />

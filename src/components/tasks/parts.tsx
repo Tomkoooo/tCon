@@ -81,7 +81,7 @@ export function AgentChip({ task, compact }: { task: Task; compact?: boolean }) 
   if (v.kind === "none") return null;
   return (
     <span className={`tk-agent tk-agent-${v.kind}${compact ? " tk-agent-compact" : ""}`} title={v.title}>
-      {v.kind === "working" ? <Spinner /> : <ClaudeMark size={10} />}
+      {v.kind === "working" || v.kind === "planning" ? <Spinner /> : <ClaudeMark size={10} />}
       {!compact && <span>{v.label}</span>}
     </span>
   );

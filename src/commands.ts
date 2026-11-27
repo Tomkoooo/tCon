@@ -7,7 +7,9 @@ import { terminals } from "./terminal/registry";
 import { closeEditors } from "./components/editor/editorActions";
 import { useTheming } from "./theming/store";
 import { refreshWorkspace } from "./refresh";
-import { openBoard, quickAddTask, showTasksView } from "./tasks/actions";
+import { useTasks } from "./tasks/store";
+import { useSearchUI } from "./search/Pickers";
+import { openBoard, planInbox, quickAddTask, resumeActiveQueue, resumeAllQueues, showTasksView, stopAllQueues, stopQueueAfterCurrent } from "./tasks/actions";
 import { openDevServer, promptOpenUrl, toggleBrowserView } from "./browser/actions";
 import { checkForUpdates } from "./updater";
 
@@ -117,6 +119,15 @@ export const COMMANDS: Command[] = [
   { id: "tasks.quickAdd", title: "Tasks: Quick Add", run: quickAddTask },
   { id: "tasks.openBoard", title: "Tasks: Open Board", run: () => openBoard() },
   { id: "tasks.showView", title: "Tasks: Show Tasks View", run: () => showTasksView() },
+  { id: "search.quickOpen", title: "Go to File…", run: () => useSearchUI.getState().show("files") },
+  { id: "search.findInFiles", title: "Search: Find in Files", run: () => useSearchUI.getState().show("text") },
+  { id: "search.switchProject", title: "Switch Project…", run: () => useSearchUI.getState().show("projects") },
+  { id: "tasks.importNotes", title: "Tasks: Import Notes…", run: () => useTasks.getState().setImportOpen(true) },
+  { id: "tasks.planInbox", title: "Tasks: Plan Inbox with Claude", run: () => void planInbox() },
+  { id: "tasks.stopAfterCurrent", title: "Tasks: Stop Queue After Current Tasks", run: stopQueueAfterCurrent },
+  { id: "tasks.resumeQueue", title: "Tasks: Resume Queue", run: resumeActiveQueue },
+  { id: "tasks.stopAllQueues", title: "Tasks: Stop All Queues After Current Tasks", run: stopAllQueues },
+  { id: "tasks.resumeAllQueues", title: "Tasks: Resume All Queues", run: resumeAllQueues },
   { id: "browser.openUrl", title: "Browser: Open URL…", run: promptOpenUrl },
   { id: "browser.openDevServer", title: "Browser: Open Dev Server", run: () => openDevServer() },
   { id: "browser.showView", title: "Browser: Show Browser View", run: toggleBrowserView },
@@ -155,6 +166,9 @@ export const DEFAULT_KEYBINDINGS: Keybinding[] = [
   { key: "cmd+b", command: "workbench.action.toggleSidebarVisibility" },
   { key: "cmd+shift+e", command: "workbench.view.explorer" },
   { key: "cmd+shift+g", command: "workbench.view.scm" },
+  { key: "cmd+p", command: "search.quickOpen" },
+  { key: "cmd+shift+f", command: "search.findInFiles" },
+  { key: "cmd+o", command: "search.switchProject" },
   { key: "cmd+shift+a", command: "tasks.quickAdd" },
   { key: "cmd+shift+b", command: "tasks.openBoard" },
   { key: "cmd+shift+o", command: "browser.openUrl" },

@@ -56,7 +56,12 @@ decrypted).
   `chmod go-rwx` on them. It never reads, moves or deletes anything. New account folders
   are created with 0700.
 - **Logins leaking between accounts.** Account folders are only created under
-  `~/.claude-accounts/`. Credential files are never symlinked or shared.
+  `~/.claude-accounts/`. Credential files are never symlinked or shared. When you switch
+  accounts, tCon copies only the conversation transcripts of the moved sessions
+  (`<config dir>/projects/<project>/<session id>.jsonl` and that session's folder), never
+  anything else in the config dir. Session ids are recorded per terminal in
+  `~/.tcon/sessions/` by a `SessionStart` hook tCon passes to `claude --settings`; the
+  only variable tCon adds to terminals for this is `TCON_PANE_ID`, which isn't a secret.
 - **Secrets in terminal environments.** tCon never puts tokens into a terminal's
   environment. The project "Environment" field rejects names containing KEY, TOKEN,
   SECRET, PASSWORD or CREDENTIAL, and the backend drops them again. Variables from tCon's

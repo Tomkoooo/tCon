@@ -158,7 +158,7 @@ function TermTab({ project, tab, index, active }: { project: Project; tab: Termi
   return (
     <>
     <div
-      className={`term-tab${active ? " active" : ""}${dragOver ? " drop" : ""}`}
+      className={`term-tab${active ? " active" : ""}${dragOver ? " drop" : ""}${status?.state === "blocked" ? " attn" : ""}`}
       style={{ ["--pane-accent" as string]: project.color }}
       title={[panes.map((p) => `${p.title} — ${p.cwd}`).join("\n"), msg].filter(Boolean).join("\n")}
       draggable

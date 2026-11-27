@@ -6,9 +6,10 @@ import { useEffect } from "react";
 import { create } from "zustand";
 import { listen } from "@tauri-apps/api/event";
 import { hasBackend, tasksApi } from "./api";
-import type { BoardSettings, BoardState, Task, TaskPatch } from "./types";
+import { DEFAULT_SETTINGS, type BoardSettings, type BoardState, type BulkOp, type Task, type TaskPatch } from "./types";
 import type { FsChangedEvent } from "../types";
 import { onRefresh } from "../refresh";
+import { parseQuickInput } from "../quick/parse";
 
 export interface BoardEntry {
   state: BoardState | null;
@@ -21,6 +22,8 @@ export interface AgentPrompt {
   root: string;
   taskId: string;
   title: string;
+  /** "start" (new Todo task, default) or "resume" (interrupted agent) */
+  kind?: "start" | "resume";
 }
 
 interface TasksState {
@@ -31,16 +34,25 @@ interface TasksState {
   openTask: Record<string, string | null>;
   /** last "quick add" request (focuses the capture box when the Tasks view shows) */
   captureAt: number;
+  /** "Import notes" modal open */
+  importOpen: boolean;
+  setImportOpen(v: boolean): void;
   /** transient message for the tasks UI (errors, "skill installed") */
   notice: { text: string; error?: boolean; at: number } | null;
 
   load(root: string): Promise<void>;
   ensure(root: string): void;
   create(root: string, title: string, description?: string, status?: string): Promise<Task | null>;
+  /** Create from typed text: `#label` and `!priority` tokens in the title are applied, not kept. */
+  capture(root: string, text: string, description?: string, status?: string): Promise<Task | null>;
   update(root: string, id: string, patch: TaskPatch): Promise<Task | null>;
   move(root: string, id: string, column: string, index: number): Promise<void>;
   remove(root: string, id: string): Promise<void>;
+  /** Several patches / moves / deletes at once (multi-select). */
+  bulk(root: string, ops: BulkOp[]): Promise<void>;
   saveSettings(root: string, patch: Partial<BoardSettings>): Promise<void>;
+  /** Replace the run queue (and optionally the current batch). */
+  setQueue(root: string, queue: string[], batch?: string[]): Promise<void>;
   setOpenTask(root: string, id: string | null): void;
   requestCapture(): void;
   pushPrompt(p: Omit<AgentPrompt, "key">): void;
@@ -102,7 +114,12 @@ export const useTasks = create<TasksState>((set, get) => {
     prompts: [],
     openTask: {},
     captureAt: 0,
+    importOpen: false,
     notice: null,
+
+    setImportOpen(v) {
+      set({ importOpen: v });
+    },
 
     async load(root) {
       root = trim(root);
@@ -149,6 +166,15 @@ export const useTasks = create<TasksState>((set, get) => {
       } catch (e) {
         return fail(e);
       }
+    },
+
+    async capture(root, text, description = "", status = "inbox") {
+      const p = parseQuickInput(text);
+      if (!p.title) return null;
+      const desc = [p.description, description.trim()].filter(Boolean).join("\n\n");
+      const t = await get().create(root, p.title, desc, status);
+      if (!t || (!p.priority && !p.labels.length)) return t;
+      return get().update(root, t.id, { ...(p.priority ? { priority: p.priority } : {}), ...(p.labels.length ? { labels: p.labels } : {}) });
     },
 
     async update(root, id, patch) {
@@ -207,10 +233,43 @@ export const useTasks = create<TasksState>((set, get) => {
       void get().load(root);
     },
 
+    async bulk(root, ops) {
+      root = trim(root);
+      if (!ops.length) return;
+      const st = get().boards[root]?.state;
+      if (st) {
+        // Optimistic: apply patches, moves and deletes locally.
+        const del = new Set(ops.filter((o) => o.delete).map((o) => o.id));
+        const columns: Record<string, string[]> = {};
+        for (const [k, v] of Object.entries(st.columns)) columns[k] = v.filter((x) => !del.has(x));
+        const tasks = st.tasks.filter((t) => !del.has(t.id)).map((t) => {
+          const op = ops.find((o) => o.id === t.id);
+          if (!op) return t;
+          const { log: _log, ...fields } = op.patch ?? {};
+          const next = { ...t, ...fields } as Task;
+          if (op.column && op.column !== t.status) {
+            for (const k of Object.keys(columns)) columns[k] = columns[k].filter((x) => x !== t.id);
+            columns[op.column] = [...(columns[op.column] ?? []), t.id];
+            next.status = op.column;
+          }
+          return next;
+        });
+        setEntry(root, { state: { ...st, tasks, columns } });
+      }
+      try {
+        const r = await tasksApi.bulk(root, ops);
+        applyState(root, r.state);
+        if (r.failed.length) get().setNotice(r.failed.map(([id, e]) => `${id}: ${e}`).join("\n"), true);
+      } catch (e) {
+        fail(e);
+        void get().load(root);
+      }
+    },
+
     async saveSettings(root, patch) {
       root = trim(root);
       const st = get().boards[root]?.state;
-      const settings: BoardSettings = { askOnTodo: false, maxAgents: 1, shared: false, ...st?.board.settings, ...patch };
+      const settings: BoardSettings = { ...DEFAULT_SETTINGS, ...st?.board.settings, ...patch };
       if (st) setEntry(root, { state: { ...st, board: { ...st.board, settings } } });
       try {
         await tasksApi.saveSettings(root, settings);
@@ -218,6 +277,20 @@ export const useTasks = create<TasksState>((set, get) => {
         fail(e);
       }
       void get().load(root);
+    },
+
+    async setQueue(root, queue, batch) {
+      root = trim(root);
+      const st = get().boards[root]?.state;
+      if (st) setEntry(root, { state: { ...st, board: { ...st.board, runQueue: queue, batch: batch ?? st.board.batch } } });
+      try {
+        const board = await tasksApi.setQueue(root, queue, batch);
+        const cur = get().boards[root]?.state;
+        if (cur) setEntry(root, { state: { ...cur, board: { ...cur.board, runQueue: board.runQueue, batch: board.batch } } });
+      } catch (e) {
+        fail(e);
+        void get().load(root);
+      }
     },
 
     setOpenTask(root, id) {

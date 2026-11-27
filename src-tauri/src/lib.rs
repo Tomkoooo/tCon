@@ -1,13 +1,18 @@
+mod agent_worktree;
 mod appicon;
 mod background;
 mod browser;
 mod cli;
+mod clipboard;
 mod db;
 mod fs;
 mod git;
+mod limits;
 pub mod osc;
 mod pty;
+mod search;
 mod security;
+mod sessions;
 mod tasks;
 mod themes;
 
@@ -186,6 +191,16 @@ pub fn run() {
         .invoke_handler(background::guard_invoke(browser::guard_invoke(tauri::generate_handler![
             appicon::app_set_icon,
             appicon::app_icon_preview,
+            clipboard::clipboard_file_paths,
+            search::project_files,
+            search::project_search,
+            sessions::claude_pane_sessions,
+            sessions::claude_forget_panes,
+            sessions::claude_copy_session,
+            agent_worktree::task_worktree_add,
+            agent_worktree::task_worktree_remove,
+            agent_worktree::task_worktree_merge,
+            agent_worktree::task_worktree_pr,
             pty_spawn,
             pty_write,
             pty_resize,
@@ -236,6 +251,9 @@ pub fn run() {
             tasks::task_delete,
             tasks::tasks_save_settings,
             tasks::tasks_install_skill,
+            tasks::tasks_refresh_skill,
+            tasks::tasks_set_queue,
+            tasks::task_bulk,
             background::background_apply,
             background::background_status,
             background::background_check_shortcut,
@@ -244,6 +262,8 @@ pub fn run() {
             background::quick_projects,
             background::quick_hide,
             background::quick_open,
+            background::quick_start_drag,
+            background::quick_reset_position,
             browser::builtin::browser_info,
             browser::builtin::browser_create,
             browser::builtin::browser_set_bounds,

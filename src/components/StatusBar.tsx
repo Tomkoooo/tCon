@@ -3,6 +3,7 @@ import { useWorkspace } from "../store/workspace";
 import { useTheming } from "../theming/store";
 import { MODEL_SETTING, modelLabel, normalizeModel } from "../claudeModel";
 import { ClaudeMark, Icon } from "./icons";
+import { AgentStatusItem } from "./tasks/AgentStatus";
 
 export function StatusBar() {
   const project = useWorkspace((s) => (s.activeProjectId ? s.projects[s.activeProjectId] : null));
@@ -40,6 +41,7 @@ export function StatusBar() {
         </>
       )}
       <span className="spacer" />
+      <AgentStatusItem />
       {working > 0 && <span className="sb-item"><span className="sb-pip working" />{working} working</span>}
       {blocked > 0 && <button className="sb-item clickable attn" onClick={jumpToAttention} title="Jump to it (⌘J)"><span className="sb-pip" />{blocked} need{blocked === 1 ? "s" : ""} you</button>}
       {done > 0 && <button className="sb-item clickable ok" onClick={jumpToAttention} title="Jump to it (⌘J)"><Icon name="check" size={12} />{done} done</button>}

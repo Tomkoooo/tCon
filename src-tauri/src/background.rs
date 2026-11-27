@@ -49,6 +49,8 @@ pub const QUICK_COMMANDS: &[&str] = &[
     "quick_projects",
     "quick_hide",
     "quick_open",
+    "quick_start_drag",
+    "quick_reset_position",
 ];
 
 // ---------------- settings ----------------
@@ -266,6 +268,10 @@ pub struct BgState {
     main_was_focused: AtomicBool,
     /// When the quick panel was last shown (ms), to ignore the blur that can follow at once.
     shown_at: AtomicU64,
+    /// Set while the user drags the quick panel, so the resulting moves are remembered.
+    dragging: AtomicBool,
+    /// Where the user last dragged the quick panel (physical px). `None`: centre it.
+    quick_pos: Mutex<Option<(i32, i32)>>,
 }
 
 #[derive(Serialize)]
@@ -399,6 +405,12 @@ fn create_quick_window(app: &AppHandle) -> tauri::Result<()> {
     macos_tweak(&w);
     let app2 = app.clone();
     w.on_window_event(move |ev| {
+        if let tauri::WindowEvent::Moved(p) = ev {
+            let st = app2.state::<BgState>();
+            if st.dragging.load(Ordering::Relaxed) {
+                *st.quick_pos.lock() = Some((p.x, p.y));
+            }
+        }
         if let tauri::WindowEvent::Focused(false) = ev {
             let st = app2.state::<BgState>();
             if now_ms().saturating_sub(st.shown_at.load(Ordering::Relaxed)) > 250 {
@@ -434,8 +446,12 @@ fn macos_tweak(w: &WebviewWindow) {
     ns.setLevel(25);
 }
 
-/// Centre the quick panel on the monitor under the cursor, a bit above the middle.
+/// Put the quick panel where the user last dragged it when that spot is on the monitor under
+/// the cursor; otherwise centre it on that monitor, a bit above the middle.
 fn position_quick(app: &AppHandle, w: &WebviewWindow) {
+    let st = app.state::<BgState>();
+    st.dragging.store(false, Ordering::Relaxed);
+    let saved = *st.quick_pos.lock();
     let monitor = app
         .cursor_position()
         .ok()
@@ -447,6 +463,13 @@ fn position_quick(app: &AppHandle, w: &WebviewWindow) {
     let (mx, my) = (m.position().x as f64, m.position().y as f64);
     let (mw, mh) = (m.size().width as f64, m.size().height as f64);
     let (ww, wh) = (QUICK_W * scale, QUICK_H * scale);
+    if let Some((sx, sy)) = saved {
+        let (sx, sy) = (sx as f64, sy as f64);
+        if sx >= mx && sy >= my && sx + ww / 2.0 <= mx + mw && sy + wh / 4.0 <= my + mh {
+            let _ = w.set_position(tauri::PhysicalPosition::new(sx as i32, sy as i32));
+            return;
+        }
+    }
     let x = mx + (mw - ww) / 2.0;
     let y = my + ((mh - wh) * 0.32).max(0.0);
     let _ = w.set_position(tauri::PhysicalPosition::new(x.round() as i32, y.round() as i32));
@@ -699,6 +722,23 @@ pub fn quick_hide(app: AppHandle) {
 pub fn quick_open(app: AppHandle, root: String, task_id: Option<String>) {
     let board = task_id.is_some();
     open_in_main(&app, root, task_id, board);
+}
+
+/// Quick panel: start moving the window with the mouse (drag handle). The new position is
+/// remembered for the next time it opens on the same monitor.
+#[tauri::command]
+pub fn quick_start_drag(app: AppHandle) {
+    let Some(w) = app.get_webview_window(QUICK_LABEL) else { return };
+    app.state::<BgState>().dragging.store(true, Ordering::Relaxed);
+    let _ = w.start_dragging();
+}
+
+/// Quick panel: forget the dragged position and centre the window again.
+#[tauri::command]
+pub fn quick_reset_position(app: AppHandle) {
+    let Some(w) = app.get_webview_window(QUICK_LABEL) else { return };
+    *app.state::<BgState>().quick_pos.lock() = None;
+    position_quick(&app, &w);
 }
 
 // ---------------- tests ----------------

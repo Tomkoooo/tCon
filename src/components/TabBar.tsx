@@ -120,7 +120,7 @@ function Tab({ project, index }: { project: Project; index: number }) {
   return (
     <>
       <div
-        className={`tab${project.id === activeProjectId ? " active" : ""}`}
+        className={`tab${attention > 0 ? " attn" : ""}${project.id === activeProjectId ? " active" : ""}`}
         style={{ ["--tab-color" as string]: project.color, outline: dragOver ? "1px dashed var(--accent)" : undefined }}
         title={title}
         draggable={!editing}

@@ -18,12 +18,14 @@ import { BackgroundSection } from "./BackgroundSettings";
 import { SettingRow, SettingsGroup, SettingsSearch, SettingsSection } from "./settingsKit";
 import { BrowserSection } from "./browser/BrowserSettings";
 import { UpdatesSection } from "./UpdateSettings";
+import { NotificationsSection } from "./NotificationSettings";
 import { Badge, CommitInput, Segmented } from "./ui";
 import { Icon } from "./icons";
 
 const SECTIONS = [
   { id: "accounts", label: "Accounts", icon: "M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm-5.5 6c.4-2.6 2.7-4.5 5.5-4.5s5.1 1.9 5.5 4.5" },
   { id: "claude", label: "Claude", icon: "M8 1.5l1.6 4.1 4.4.3-3.4 2.8 1.1 4.3L8 10.6 4.3 13l1.1-4.3L2 5.9l4.4-.3z" },
+  { id: "notifications", label: "Notifications", icon: "M4 11V7a4 4 0 0 1 8 0v4l1.5 1.5h-11zM6.5 13.5a1.5 1.5 0 0 0 3 0" },
   { id: "appearance", label: "Appearance", icon: "M8 1.5a6.5 6.5 0 1 0 0 13c.8 0 1.2-.5 1.2-1.1 0-.8-.6-1-.6-1.7 0-.6.5-1 1.1-1H11a3.5 3.5 0 0 0 3.5-3.5C14.5 4 11.6 1.5 8 1.5z" },
   { id: "terminal", label: "Terminal", icon: "M2 3h12v10H2zM4.5 6l2 2-2 2M8 10.5h3.5" },
   { id: "browser", label: "Browser", icon: "M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM1.5 8h13M8 1.5c1.8 1.8 2.7 4 2.7 6.5S9.8 12.7 8 14.5C6.2 12.7 5.3 10.5 5.3 8S6.2 3.3 8 1.5z" },
@@ -92,6 +94,7 @@ export function ProfilesModal() {
           <SettingsSearch.Provider value={q}>
             {show("accounts") && <AccountsSection />}
             {show("claude") && <ClaudeSection />}
+            {show("notifications") && <NotificationsSection />}
             {show("appearance") && <AppearanceSection />}
             {show("terminal") && <TerminalSection />}
             {show("browser") && <BrowserSection />}

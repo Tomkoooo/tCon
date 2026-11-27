@@ -1,4 +1,5 @@
 import { useRefresh } from "../../refresh";
+import { applyReveal, onRevealRequest } from "./reveal";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { listen } from "@tauri-apps/api/event";
@@ -220,6 +221,7 @@ function FileEditor({ tabId, path, root }: { tabId: string; path: string; root: 
       setPreviewSrc(fc.content);
       setDirty(false);
       setLoad({ kind: "ready" });
+      requestAnimationFrame(() => applyReveal(path, created));
     }).catch((e: unknown) => {
       if (!cancelled) setLoad({ kind: "error", message: String(e) });
     });
@@ -231,6 +233,9 @@ function FileEditor({ tabId, path, root }: { tabId: string; path: string; root: 
       savedDocRef.current = null;
     };
   }, [path, isMd]);
+
+  // "Open at line" requests for this file (search results) while it's already open.
+  useEffect(() => onRevealRequest((p) => p === path && applyReveal(path, viewRef.current)), [path]);
 
   // Follow the system color scheme.
   useEffect(() => {

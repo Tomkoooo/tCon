@@ -146,6 +146,18 @@ textarea.mono, input.mono { font-family: var(--font-mono); font-size: var(--fs-s
 .status-dot.none { display: none; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
 @media (prefers-reduced-motion: reduce) { .status-dot.working, .status-dot.blocked { animation: none; } }
+/* A file dragged over a terminal: its path will be pasted there. */
+.pane.file-drop::before { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 3; box-shadow: inset 0 0 0 2px var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+
+/* Needs you: a pane / tab whose Claude session is waiting for input pulses softly. */
+@keyframes attn-glow { 0%, 100% { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 35%, transparent); } 50% { box-shadow: inset 0 0 0 2px var(--warn); } }
+@keyframes attn-tab { 0%, 100% { background-color: transparent; } 50% { background-color: color-mix(in srgb, var(--warn) 18%, transparent); } }
+.pane.attn::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 2; animation: attn-glow 1.6s ease-in-out infinite; }
+.term-tab.attn:not(.active), .tab.attn:not(.active) { animation: attn-tab 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .pane.attn::after { animation: none; box-shadow: inset 0 0 0 2px var(--warn); }
+  .term-tab.attn, .tab.attn { animation: none; }
+}
 
 /* ---------- Project view / panes ---------- */
 .project-view { flex: 1; min-width: 0; display: flex; }

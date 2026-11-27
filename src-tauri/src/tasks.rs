@@ -41,6 +41,12 @@ pub struct Task {
     pub branch: String,
     pub commits: Vec<String>,
     pub pane_id: String,
+    /// Tasks that must reach Review/Done before this one may start (`depends: [T-3]`).
+    pub depends: Vec<String>,
+    /// Git worktree the agent works in (isolation: worktree), "" = the main checkout.
+    pub worktree: String,
+    /// Claude session id of the agent (resume after a restart / usage limit).
+    pub session: String,
     /// Frontmatter keys we don't know, kept verbatim (key, raw value).
     pub extra: Vec<(String, String)>,
     /// Body text before the agent sections.
@@ -59,17 +65,72 @@ pub struct Column {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct BoardSettings {
-    /// Offer to start Claude when a task enters Todo.
-    pub ask_on_todo: bool,
+    /// Old boolean form of `auto_pickup` (`true` = "ask"); read for migration, never written.
+    #[serde(skip_serializing)]
+    pub ask_on_todo: Option<bool>,
+    /// What happens when a task enters Todo: "off" | "ask" | "auto" (queue and start).
+    pub auto_pickup: String,
+    /// Where a task joins the run queue: "end" | "front" | "priority".
+    pub pickup_position: String,
+    /// New Inbox tasks get a planning agent automatically.
+    pub inbox_auto_plan: bool,
     /// Concurrent agents per board; the rest are queued.
     pub max_agents: u32,
+    /// "rolling" (keep max_agents busy) | "batch" (start batch_size, wait for all) |
+    /// "parallel-safe" (start non-conflicting groups by the plans' Files lines).
+    pub run_mode: String,
+    pub batch_size: u32,
+    /// Queue stopped: running agents finish, no new ones start.
+    pub paused: bool,
+    /// "none" | "worktree": each agent gets its own branch + git worktree.
+    pub isolation: String,
+    /// Shell command run in a new worktree before the agent starts (e.g. `npm ci`).
+    pub worktree_setup: String,
+    /// Symlink the main checkout's node_modules into new worktrees.
+    pub link_node_modules: bool,
+    /// Interrupted agents (app closed, machine restarted): "auto" resume | "ask".
+    pub resume_interrupted: String,
     /// Share `.tcon/` via git (no `.git/info/exclude` entry).
     pub shared: bool,
 }
 
 impl Default for BoardSettings {
     fn default() -> Self {
-        Self { ask_on_todo: false, max_agents: 1, shared: false }
+        Self {
+            ask_on_todo: None,
+            auto_pickup: "off".into(),
+            pickup_position: "end".into(),
+            inbox_auto_plan: false,
+            max_agents: 1,
+            run_mode: "rolling".into(),
+            batch_size: 2,
+            paused: false,
+            isolation: "none".into(),
+            worktree_setup: String::new(),
+            link_node_modules: true,
+            resume_interrupted: "ask".into(),
+            shared: false,
+        }
+    }
+}
+
+impl BoardSettings {
+    /// Fill in defaults / migrate the old `askOnTodo` flag and clamp numbers.
+    fn normalize(mut self) -> Self {
+        if let Some(ask) = self.ask_on_todo.take() {
+            if ask && (self.auto_pickup.is_empty() || self.auto_pickup == "off") {
+                self.auto_pickup = "ask".into();
+            }
+        }
+        let pick = |v: &str, allowed: &[&str]| if allowed.contains(&v) { v.to_string() } else { allowed[0].to_string() };
+        self.auto_pickup = pick(&self.auto_pickup, &["off", "ask", "auto"]);
+        self.pickup_position = pick(&self.pickup_position, &["end", "front", "priority"]);
+        self.run_mode = pick(&self.run_mode, &["rolling", "batch", "parallel-safe"]);
+        self.isolation = pick(&self.isolation, &["none", "worktree"]);
+        self.resume_interrupted = pick(&self.resume_interrupted, &["ask", "auto"]);
+        self.max_agents = self.max_agents.clamp(1, 16);
+        self.batch_size = self.batch_size.clamp(1, 16);
+        self
     }
 }
 
@@ -82,6 +143,10 @@ pub struct Board {
     pub order: BTreeMap<String, Vec<String>>,
     pub next_id: u32,
     pub settings: BoardSettings,
+    /// Task ids waiting for an agent, in start order.
+    pub run_queue: Vec<String>,
+    /// Batch run mode: the ids started together in the current batch.
+    pub batch: Vec<String>,
 }
 
 impl Default for Board {
@@ -93,6 +158,8 @@ impl Default for Board {
             order: BTreeMap::new(),
             next_id: 1,
             settings: BoardSettings::default(),
+            run_queue: Vec::new(),
+            batch: Vec::new(),
         }
     }
 }
@@ -122,6 +189,9 @@ pub struct TaskPatch {
     pub agent: Option<String>,
     pub branch: Option<String>,
     pub pane_id: Option<String>,
+    pub depends: Option<Vec<String>>,
+    pub worktree: Option<String>,
+    pub session: Option<String>,
     pub description: Option<String>,
     /// Line appended to `## Progress log`.
     pub log: Option<String>,
@@ -368,6 +438,9 @@ pub fn parse_task(text: &str, fallback_id: &str) -> Task {
                     "branch" => t.branch = unquote(&raw),
                     "commits" => t.commits = parse_list(&raw),
                     "pane" | "paneId" => t.pane_id = unquote(&raw),
+                    "depends" | "dependsOn" => t.depends = parse_list(&raw),
+                    "worktree" => t.worktree = unquote(&raw),
+                    "session" => t.session = unquote(&raw),
                     _ => t.extra.push((key, raw)),
                 }
             }
@@ -416,6 +489,15 @@ pub fn serialize_task(t: &Task) -> String {
     kv(&mut s, "branch", &quote(&t.branch));
     kv(&mut s, "commits", &fmt_list(&t.commits));
     kv(&mut s, "pane", &quote(&t.pane_id));
+    if !t.depends.is_empty() {
+        kv(&mut s, "depends", &fmt_list(&t.depends));
+    }
+    if !t.worktree.is_empty() {
+        kv(&mut s, "worktree", &quote(&t.worktree));
+    }
+    if !t.session.is_empty() {
+        kv(&mut s, "session", &quote(&t.session));
+    }
     for (k, v) in &t.extra {
         kv(&mut s, k, v);
     }
@@ -481,7 +563,7 @@ fn read_board(root: &str) -> Board {
                 b.columns = Board::default().columns;
             }
             b.next_id = b.next_id.max(1);
-            b.settings.max_agents = b.settings.max_agents.clamp(1, 16);
+            b.settings = b.settings.normalize();
             b
         })
         .unwrap_or_default()
@@ -685,6 +767,10 @@ pub fn create(root: &str, title: &str, description: &str, status: &str) -> Resul
 
 pub fn update(root: &str, id: &str, patch: TaskPatch) -> Result<Task, String> {
     let _g = LOCK.lock();
+    update_locked(root, id, patch)
+}
+
+fn update_locked(root: &str, id: &str, patch: TaskPatch) -> Result<Task, String> {
     let mut t = read_task(root, id)?;
     if let Some(v) = patch.title {
         t.title = v.trim().to_string();
@@ -709,6 +795,15 @@ pub fn update(root: &str, id: &str, patch: TaskPatch) -> Result<Task, String> {
     }
     if let Some(v) = patch.pane_id {
         t.pane_id = v;
+    }
+    if let Some(v) = patch.session {
+        t.session = v;
+    }
+    if let Some(v) = patch.worktree {
+        t.worktree = v;
+    }
+    if let Some(v) = patch.depends {
+        t.depends = v.into_iter().map(|d| d.trim().to_string()).filter(|d| !d.is_empty()).collect();
     }
     if let Some(v) = patch.description {
         t.description = v.trim().to_string();
@@ -753,7 +848,7 @@ pub fn delete(root: &str, id: &str) -> Result<(), String> {
     }
     let mut board = read_board(root);
     let mut changed = false;
-    for v in board.order.values_mut() {
+    for v in board.order.values_mut().chain([&mut board.run_queue, &mut board.batch]) {
         let before = v.len();
         v.retain(|x| x != id);
         changed |= v.len() != before;
@@ -768,11 +863,91 @@ pub fn save_settings(root: &str, settings: BoardSettings) -> Result<Board, Strin
     let _g = LOCK.lock();
     let mut board = ensure_init(root)?;
     let shared_changed = board.settings.shared != settings.shared;
-    board.settings = BoardSettings { max_agents: settings.max_agents.clamp(1, 16), ..settings };
+    board.settings = settings.normalize();
     write_board(root, &board)?;
     if shared_changed {
         apply_exclude(root, board.settings.shared)?;
     }
+    Ok(board)
+}
+
+/// One operation of [`bulk`]: patch a task, move it to the end of a column, or delete it.
+#[derive(Deserialize, Debug, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct BulkOp {
+    pub id: String,
+    pub patch: Option<TaskPatch>,
+    pub column: Option<String>,
+    pub delete: bool,
+}
+
+/// Apply several task operations under one lock (multi-select on the board). Returns the
+/// board afterwards and the errors of the operations that failed (id, message).
+pub fn bulk(root: &str, ops: Vec<BulkOp>) -> Result<(BoardState, Vec<(String, String)>), String> {
+    let mut failed = Vec::new();
+    {
+        let _g = LOCK.lock();
+        let mut board = read_board(root);
+        let mut order_dirty = false;
+        let (tasks, _) = read_tasks(root);
+        let mut order = reconcile(&board, &tasks);
+        for op in ops {
+            let res: Result<(), String> = (|| {
+                if op.delete {
+                    let p = task_path(root, &op.id)?;
+                    if p.exists() {
+                        fs::remove_file(&p).map_err(|e| e.to_string())?;
+                    }
+                    for v in order.values_mut().chain([&mut board.run_queue, &mut board.batch]) {
+                        v.retain(|x| x != &op.id);
+                    }
+                    order_dirty = true;
+                    return Ok(());
+                }
+                if let Some(patch) = op.patch {
+                    update_locked(root, &op.id, patch)?;
+                }
+                if let Some(col) = op.column {
+                    let Some(title) = board.columns.iter().find(|c| c.id == col).map(|c| c.title.clone()) else {
+                        return Err(format!("unknown column: {col}"));
+                    };
+                    let mut t = read_task(root, &op.id)?;
+                    if t.status != col {
+                        t.status = col.clone();
+                        t.updated = now_iso();
+                        t.sections = append_log(&t.sections, &log_line(&format!("Moved to {title}")));
+                        write_task(root, &t)?;
+                    }
+                    let len = order.get(&col).map(|v| v.len()).unwrap_or(0);
+                    move_in_order(&mut order, &op.id, &col, len);
+                    order_dirty = true;
+                }
+                Ok(())
+            })();
+            if let Err(e) = res {
+                failed.push((op.id, e));
+            }
+        }
+        if order_dirty {
+            board.order = order;
+            write_board(root, &board)?;
+        }
+    }
+    Ok((load(root), failed))
+}
+
+/// Replace the run queue (and the current batch). Unknown ids are dropped.
+pub fn set_queue(root: &str, queue: Vec<String>, batch: Option<Vec<String>>) -> Result<Board, String> {
+    let _g = LOCK.lock();
+    let mut board = ensure_init(root)?;
+    let (tasks, _) = read_tasks(root);
+    let known: HashSet<&str> = tasks.iter().map(|t| t.id.as_str()).collect();
+    let mut seen = HashSet::new();
+    board.run_queue = queue.into_iter().filter(|id| known.contains(id.as_str()) && seen.insert(id.clone())).collect();
+    if let Some(b) = batch {
+        board.batch = b.into_iter().filter(|id| known.contains(id.as_str())).collect();
+    }
+    write_board(root, &board)?;
     Ok(board)
 }
 
@@ -788,6 +963,28 @@ pub fn install_skill(config_dirs: &[String]) -> Result<Vec<String>, String> {
         let p = Path::new(d).join("skills").join(SKILL_NAME).join("SKILL.md");
         write_atomic(&p, SKILL_MD)?;
         written.push(p.to_string_lossy().into_owned());
+    }
+    Ok(written)
+}
+
+/// Rewrite copies of the skill that are already installed but outdated (after a tCon update).
+/// Config dirs without the skill are left alone. Returns the paths that were updated.
+pub fn refresh_skill(config_dirs: &[String]) -> Result<Vec<String>, String> {
+    let mut written = Vec::new();
+    let mut seen = HashSet::new();
+    for d in config_dirs {
+        let d = d.trim_end_matches('/');
+        if d.is_empty() || !seen.insert(d.to_string()) {
+            continue;
+        }
+        let p = Path::new(d).join("skills").join(SKILL_NAME).join("SKILL.md");
+        match fs::read_to_string(&p) {
+            Ok(cur) if cur != SKILL_MD => {
+                write_atomic(&p, SKILL_MD)?;
+                written.push(p.to_string_lossy().into_owned());
+            }
+            _ => {}
+        }
     }
     Ok(written)
 }
@@ -840,6 +1037,28 @@ pub async fn tasks_save_settings(root: String, settings: BoardSettings) -> Resul
     blocking(move || save_settings(&root, settings)).await
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkResult {
+    pub state: BoardState,
+    pub failed: Vec<(String, String)>,
+}
+
+#[tauri::command]
+pub async fn task_bulk(root: String, ops: Vec<BulkOp>) -> Result<BulkResult, String> {
+    blocking(move || bulk(&root, ops).map(|(state, failed)| BulkResult { state, failed })).await
+}
+
+#[tauri::command]
+pub async fn tasks_set_queue(root: String, queue: Vec<String>, batch: Option<Vec<String>>) -> Result<Board, String> {
+    blocking(move || set_queue(&root, queue, batch)).await
+}
+
+#[tauri::command]
+pub async fn tasks_refresh_skill(config_dirs: Vec<String>) -> Result<Vec<String>, String> {
+    blocking(move || refresh_skill(&config_dirs)).await
+}
+
 #[tauri::command]
 pub async fn tasks_install_skill(config_dirs: Vec<String>) -> Result<Vec<String>, String> {
     blocking(move || install_skill(&config_dirs)).await
@@ -870,6 +1089,9 @@ mod tests {
             branch: "feat/x".into(),
             commits: vec!["abc1234".into()],
             pane_id: "p1".into(),
+            depends: vec!["T-1".into()],
+            worktree: "/Users/x/.tcon/worktrees/p-1/T-3".into(),
+            session: "0f8fad5b-d9cb-469f-a165-70867728950e".into(),
             extra: vec![("estimate".into(), "3".into())],
             description: "Users report a loop.\n\n## Notes from the meeting\n- happens on Safari".into(),
             sections: "## Plan\n1. look\n\n## Progress log\n- 2026-11-27 10:00 — Created\n\n## Verification".into(),
@@ -992,10 +1214,79 @@ mod tests {
     }
 
     #[test]
+    fn settings_migrate_and_normalize() {
+        let b: Board = serde_json::from_str(r#"{"settings":{"askOnTodo":true,"maxAgents":40,"runMode":"weird"}}"#).unwrap();
+        let s = b.settings.normalize();
+        assert_eq!(s.auto_pickup, "ask");
+        assert_eq!(s.max_agents, 16);
+        assert_eq!(s.run_mode, "rolling");
+        assert_eq!(s.pickup_position, "end");
+        let json = serde_json::to_string(&s).unwrap();
+        assert!(!json.contains("askOnTodo"));
+        let b: Board = serde_json::from_str(r#"{"settings":{"askOnTodo":false,"autoPickup":"auto"}}"#).unwrap();
+        assert_eq!(b.settings.normalize().auto_pickup, "auto");
+    }
+
+    #[test]
+    fn queue_keeps_known_ids_once() {
+        let root = tmp("queue");
+        let r = root.to_string_lossy().to_string();
+        create(&r, "A", "", "todo").unwrap();
+        create(&r, "B", "", "todo").unwrap();
+        let b = set_queue(&r, vec!["T-2".into(), "T-9".into(), "T-1".into(), "T-2".into()], Some(vec!["T-1".into()])).unwrap();
+        assert_eq!(b.run_queue, vec!["T-2", "T-1"]);
+        assert_eq!(b.batch, vec!["T-1"]);
+        assert_eq!(load(&r).board.run_queue, vec!["T-2", "T-1"]);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn bulk_patches_moves_and_deletes() {
+        let root = tmp("bulk");
+        let r = root.to_string_lossy().to_string();
+        for n in ["A", "B", "C"] {
+            create(&r, n, "", "inbox").unwrap();
+        }
+        set_queue(&r, vec!["T-3".into()], None).unwrap();
+        let ops = vec![
+            BulkOp { id: "T-1".into(), patch: Some(TaskPatch { priority: Some("high".into()), ..Default::default() }), column: Some("todo".into()), ..Default::default() },
+            BulkOp { id: "T-2".into(), column: Some("todo".into()), ..Default::default() },
+            BulkOp { id: "T-3".into(), delete: true, ..Default::default() },
+            BulkOp { id: "T-9".into(), column: Some("todo".into()), ..Default::default() },
+        ];
+        let (st, failed) = bulk(&r, ops).unwrap();
+        assert_eq!(st.columns["todo"], vec!["T-1", "T-2"]);
+        assert!(st.columns["inbox"].is_empty());
+        assert_eq!(st.tasks.iter().find(|t| t.id == "T-1").unwrap().priority, "high");
+        assert_eq!(st.tasks.len(), 2);
+        assert!(st.board.run_queue.is_empty());
+        assert_eq!(failed.len(), 1);
+        assert_eq!(failed[0].0, "T-9");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn rejects_bad_ids() {
         assert!(task_path("/x", "../etc").is_err());
         assert!(task_path("/x", "").is_err());
         assert!(task_path("/x", "T-1").is_ok());
+    }
+
+    #[test]
+    fn refresh_skill_only_touches_installed_copies() {
+        let root = tmp("skill");
+        let a = root.join("a");
+        let b = root.join("b");
+        let pa = a.join("skills/tcon-tasks/SKILL.md");
+        fs::create_dir_all(pa.parent().unwrap()).unwrap();
+        fs::write(&pa, "old").unwrap();
+        let dirs = vec![a.to_string_lossy().into_owned(), b.to_string_lossy().into_owned()];
+        let out = refresh_skill(&dirs).unwrap();
+        assert_eq!(out.len(), 1);
+        assert_eq!(fs::read_to_string(&pa).unwrap(), SKILL_MD);
+        assert!(!b.join("skills").exists());
+        assert!(refresh_skill(&dirs).unwrap().is_empty());
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]

@@ -3,15 +3,17 @@
 import { useEffect } from "react";
 import { useWorkspace } from "../../store/workspace";
 import { installTaskWatchers, useTasks } from "../../tasks/store";
-import { installAgentRuntime, startAgent } from "../../tasks/agent";
+import { installAgentRuntime, resumeAgent, startAgent } from "../../tasks/agent";
 import { hasBackend } from "../../tasks/api";
 import { ClaudeMark } from "./parts";
+import { ImportNotesModal } from "./ImportNotesModal";
 import "./tasks.css";
 
 export function TasksHost() {
   const loaded = useWorkspace((s) => s.loaded);
   const roots = useWorkspace((s) => s.order.map((id) => s.projects[id]?.rootPath).filter(Boolean).join("\n"));
   const prompts = useTasks((s) => s.prompts);
+  const importOpen = useTasks((s) => s.importOpen);
 
   useEffect(() => {
     const a = installTaskWatchers();
@@ -28,11 +30,14 @@ export function TasksHost() {
     for (const r of roots.split("\n").filter(Boolean)) useTasks.getState().ensure(r);
   }, [loaded, roots]);
 
-  if (!prompts.length) return null;
+  const importModal = importOpen ? <ImportNotesModal onClose={() => useTasks.getState().setImportOpen(false)} /> : null;
+  if (!prompts.length) return importModal;
   const projects = useWorkspace.getState().projects;
   const multi = new Set(prompts.map((p) => p.root)).size > 1 || Object.keys(projects).length > 1;
 
   return (
+    <>
+    {importModal}
     <div className="tk-toasts" role="status">
       {prompts.map((p) => {
         const project = Object.values(projects).find((x) => x.rootPath.replace(/\/+$/, "") === p.root);
@@ -40,7 +45,7 @@ export function TasksHost() {
           <div key={p.key} className="tk-toast">
             <ClaudeMark size={14} />
             <div className="tk-toast-body">
-              <div className="tk-toast-title">Start Claude on {p.taskId}?</div>
+              <div className="tk-toast-title">{p.kind === "resume" ? `Resume the interrupted agent on ${p.taskId}?` : `Start Claude on ${p.taskId}?`}</div>
               <div className="tk-toast-sub" title={p.title}>
                 {p.title}
                 {multi && project ? <span className="tk-toast-proj"> · {project.name}</span> : null}
@@ -51,10 +56,10 @@ export function TasksHost() {
                 className="btn small primary"
                 onClick={() => {
                   useTasks.getState().dismissPrompt(p.key);
-                  void startAgent(p.root, p.taskId);
+                  void (p.kind === "resume" ? resumeAgent(p.root, p.taskId, "Resumed after an interruption") : startAgent(p.root, p.taskId));
                 }}
               >
-                Start
+                {p.kind === "resume" ? "Resume" : "Start"}
               </button>
               <button className="btn small ghost" onClick={() => useTasks.getState().dismissPrompt(p.key)}>Not now</button>
             </div>
@@ -62,5 +67,6 @@ export function TasksHost() {
         );
       })}
     </div>
+    </>
   );
 }
