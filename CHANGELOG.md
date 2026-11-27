@@ -8,6 +8,8 @@ Each release's section becomes its GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- Tasks: a **run queue** per board (Queue button in the board header). Reorder it by dragging, see why each task waits and which tasks start together, and pick a run mode: **Rolling** (keep the agent limit busy), **Batches** (start N, wait for all, then the next N) or **Parallel-safe** (start tasks together whose plans touch different files; tasks without a plan run alone). Tasks wait for their `depends:` tasks to reach Review or Done.
+- Tasks: **Stop after current** lets running agents finish while no new ones start; then **Resume**, or **Next only** to start exactly one. **Stop all now** stops every agent of the board. Also in the command palette, for one board or all of them.
 - Tasks: **Plan with Claude** (card menu and task drawer) starts a planning agent that reads the task and the code, writes a plan with the files it will touch, whether it can run in parallel and what it depends on, sets priority and labels, and moves the card to Todo, without changing any code. Several cards are split across up to the board's agent limit.
 - The `tcon-tasks` skill has a new Triage (plan only) section; installed copies of the skill are updated automatically when tCon updates.
 - Notifications settings: choose whether Claude sessions notify for every state change, only when they need you, or never; optionally also for the visible session while tCon is in the background; and whether task agents notify.
@@ -15,6 +17,7 @@ Each release's section becomes its GitHub release notes.
 - Quick panel: drag it by its top edge, project bar or footer to move it. It reopens where you left it; double-click the handle to centre it again.
 
 ### Changed
+- Tasks: auto-pickup has three modes for tasks entering Todo: do nothing, ask, or queue them automatically, and you choose whether they join the queue at the end, the front or by priority. Boards that had "Auto-pickup" on keep asking. New Inbox cards can optionally get a planning agent right away.
 - Git graph: rows with branch or tag badges show a 20-character subject, and long badge names are shortened in the middle (`origin/fe…rect-loop`), so every badge fits. Hover for the full names.
 
 ### Fixed

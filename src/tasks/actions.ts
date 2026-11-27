@@ -1,6 +1,7 @@
 // Workbench-level task actions used by commands, the sidebar and the board.
 import { useWorkspace } from "../store/workspace";
 import { useTasks } from "./store";
+import { boardRoots, resumeQueue, stopAfterCurrent } from "./agent";
 
 const trim = (p: string) => (p.length > 1 ? p.replace(/\/+$/, "") : p);
 
@@ -31,4 +32,28 @@ export function showTasksView(projectId?: string) {
 export function quickAddTask() {
   showTasksView();
   useTasks.getState().requestCapture();
+}
+
+/** Root of the active project's board. */
+export function activeRoot(): string | null {
+  return activeProject()?.rootPath ?? null;
+}
+
+/** Stop the active board's queue after its running agents finish. */
+export function stopQueueAfterCurrent() {
+  const r = activeRoot();
+  if (r) void stopAfterCurrent(r);
+}
+
+export function resumeActiveQueue() {
+  const r = activeRoot();
+  if (r) void resumeQueue(r);
+}
+
+/** Every open board: stop after current / resume. */
+export function stopAllQueues() {
+  for (const r of boardRoots()) void stopAfterCurrent(r);
+}
+export function resumeAllQueues() {
+  for (const r of boardRoots()) void resumeQueue(r);
 }

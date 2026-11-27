@@ -7,7 +7,7 @@ import { terminals } from "./terminal/registry";
 import { closeEditors } from "./components/editor/editorActions";
 import { useTheming } from "./theming/store";
 import { refreshWorkspace } from "./refresh";
-import { openBoard, quickAddTask, showTasksView } from "./tasks/actions";
+import { openBoard, quickAddTask, resumeActiveQueue, resumeAllQueues, showTasksView, stopAllQueues, stopQueueAfterCurrent } from "./tasks/actions";
 import { openDevServer, promptOpenUrl, toggleBrowserView } from "./browser/actions";
 import { checkForUpdates } from "./updater";
 
@@ -117,6 +117,10 @@ export const COMMANDS: Command[] = [
   { id: "tasks.quickAdd", title: "Tasks: Quick Add", run: quickAddTask },
   { id: "tasks.openBoard", title: "Tasks: Open Board", run: () => openBoard() },
   { id: "tasks.showView", title: "Tasks: Show Tasks View", run: () => showTasksView() },
+  { id: "tasks.stopAfterCurrent", title: "Tasks: Stop Queue After Current Tasks", run: stopQueueAfterCurrent },
+  { id: "tasks.resumeQueue", title: "Tasks: Resume Queue", run: resumeActiveQueue },
+  { id: "tasks.stopAllQueues", title: "Tasks: Stop All Queues After Current Tasks", run: stopAllQueues },
+  { id: "tasks.resumeAllQueues", title: "Tasks: Resume All Queues", run: resumeAllQueues },
   { id: "browser.openUrl", title: "Browser: Open URL…", run: promptOpenUrl },
   { id: "browser.openDevServer", title: "Browser: Open Dev Server", run: () => openDevServer() },
   { id: "browser.showView", title: "Browser: Show Browser View", run: toggleBrowserView },

@@ -11,6 +11,8 @@ import type { PaneStatus, Project } from "../types";
 import { hasBackend, tasksApi } from "./api";
 import { onBoardLoaded, taskById, useTasks } from "./store";
 import type { AgentMode, BoardState, Task } from "./types";
+import { insertIntoQueue, planMeta, previewGroups, schedule, type SchedInput, type SchedTask } from "./scheduler";
+import { notifyTask } from "../notify";
 
 const trim = (p: string) => (p.length > 1 ? p.replace(/\/+$/, "") : p);
 const shq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
@@ -84,9 +86,47 @@ export function buildPlanPrompt(tasks: Task[], root: string): string {
   `);
 }
 
-/** Agents occupying a slot on this board (running/blocked with a live pane). */
+/** Agents occupying a slot on this board (running/blocked with a live pane). Planners don't
+ *  take a slot: they only edit task files. */
+function runningIds(state: BoardState): string[] {
+  return state.tasks.filter((t) => (t.agent === "running" || t.agent === "blocked") && livePane(t)).map((t) => t.id);
+}
 function busyCount(state: BoardState): number {
-  return state.tasks.filter((t) => (t.agent === "running" || t.agent === "blocked") && livePane(t)).length;
+  return runningIds(state).length;
+}
+
+/** The run queue in start order: the board's `runQueue` (queued tasks only), then queued
+ *  tasks it doesn't list yet (oldest first). */
+export function queueOrder(state: BoardState): string[] {
+  const queued = new Map(state.tasks.filter((t) => t.agent === "queued").map((t) => [t.id, t]));
+  const out = (state.board.runQueue ?? []).filter((id) => queued.has(id));
+  const rest = [...queued.values()].filter((t) => !out.includes(t.id)).sort((a, b) => a.updated.localeCompare(b.updated));
+  return [...out, ...rest.map((t) => t.id)];
+}
+
+function schedTasks(state: BoardState): Map<string, SchedTask> {
+  return new Map(state.tasks.map((t) => [t.id, { id: t.id, status: t.status, agent: t.agent, priority: t.priority, meta: planMeta(t) }]));
+}
+
+export function schedInput(state: BoardState, oneShotRun = false): SchedInput {
+  const s = state.board.settings;
+  return {
+    queue: queueOrder(state),
+    tasks: schedTasks(state),
+    running: runningIds(state),
+    maxAgents: s.maxAgents || 1,
+    runMode: s.runMode ?? "rolling",
+    batchSize: s.batchSize || 2,
+    batch: state.board.batch ?? [],
+    paused: !!s.paused,
+    oneShot: oneShotRun,
+  };
+}
+
+/** What the queue panel shows: why each queued task waits, and the start groups. */
+export function queuePreview(state: BoardState) {
+  const input = schedInput(state);
+  return { order: input.queue, waiting: schedule(input).waiting, groups: previewGroups(input) };
 }
 
 /** root::id of agents being launched or reaped right now (their task file is in flux). */
@@ -195,13 +235,104 @@ export async function startAgent(root: string, id: string): Promise<void> {
     return;
   }
   if (busyCount(state) >= Math.max(1, state.board.settings.maxAgents || 1)) {
-    await store.update(root, id, { agent: "queued", log: "Queued for a Claude agent" });
+    await enqueue(root, [id]);
     return;
   }
   await launch(root, task);
 }
 
-export async function stopAgent(root: string, id: string): Promise<void> {
+/** Add tasks to the run queue (at the board's pickup position, or `position`) and pump it. */
+export async function enqueue(root: string, ids: string[], position?: string): Promise<void> {
+  root = trim(root);
+  const store = useTasks.getState();
+  const state = store.boards[root]?.state;
+  if (!state) return;
+  const byId = new Map(state.tasks.map((t) => [t.id, t]));
+  const fresh = ids.filter((id) => {
+    const t = byId.get(id);
+    return t && t.status !== "done" && !(livePane(t) && ["running", "blocked", "planning"].includes(t.agent));
+  });
+  if (!fresh.length) return;
+  for (const id of fresh) {
+    if (byId.get(id)?.agent !== "queued") await store.update(root, id, { agent: "queued", log: "Queued for a Claude agent" });
+  }
+  const cur = useTasks.getState().boards[root]?.state ?? state;
+  const order = insertIntoQueue(queueOrder(cur).filter((id) => !fresh.includes(id)), fresh, position ?? cur.board.settings.pickupPosition ?? "end", (id) => byId.get(id)?.priority ?? "none");
+  await store.setQueue(root, order);
+  void pumpQueue(root);
+}
+
+/** Drag-and-drop reorder of the run queue. */
+export async function reorderQueue(root: string, order: string[]): Promise<void> {
+  await useTasks.getState().setQueue(trim(root), order);
+  void pumpQueue(root);
+}
+
+// ---------------- stop / resume (queue pause) ----------------
+
+/** Roots where "Stop after current" waits for running agents (notify when they're done). */
+const stopping = new Set<string>();
+/** Roots where "Start next only" may start exactly one agent despite the pause. */
+const oneShot = new Set<string>();
+
+export async function stopAfterCurrent(root: string): Promise<void> {
+  root = trim(root);
+  await useTasks.getState().saveSettings(root, { paused: true });
+  const state = useTasks.getState().boards[root]?.state;
+  if (state && busyCount(state) > 0) stopping.add(root);
+  else useTasks.getState().setNotice(`Queue stopped${state ? ` — ${queueOrder(state).length} waiting` : ""}.`);
+}
+
+export async function resumeQueue(root: string): Promise<void> {
+  root = trim(root);
+  stopping.delete(root);
+  oneShot.delete(root);
+  await useTasks.getState().saveSettings(root, { paused: false });
+  void pumpQueue(root);
+}
+
+/** Start exactly one queued task, then stay stopped. */
+export async function startNextOnly(root: string): Promise<void> {
+  root = trim(root);
+  oneShot.add(root);
+  if (!useTasks.getState().boards[root]?.state?.board.settings.paused) await useTasks.getState().saveSettings(root, { paused: true });
+  void pumpQueue(root);
+}
+
+/** Stop the queue and every running agent of the board now. */
+export async function stopAllNow(root: string): Promise<void> {
+  root = trim(root);
+  await useTasks.getState().saveSettings(root, { paused: true });
+  stopping.delete(root);
+  const state = useTasks.getState().boards[root]?.state;
+  for (const id of state ? runningIds(state) : []) await stopAgent(root, id, { pump: false });
+  for (const t of state?.tasks ?? []) {
+    if (t.agent === "planning" && livePane(t)) await stopAgent(root, t.id, { pump: false });
+  }
+}
+
+/** Roots of loaded boards (for the global stop / resume). */
+export const boardRoots = () => Object.keys(useTasks.getState().boards).filter((r) => useTasks.getState().boards[r]?.state && projectForRoot(r));
+
+/** Notify once a stopped queue has drained, or when all queued work is finished. */
+const hadWork = new Set<string>();
+function checkDrained(root: string, state: BoardState) {
+  const busy = busyCount(state);
+  const waiting = queueOrder(state).length;
+  const name = projectForRoot(root)?.name ?? root;
+  if (stopping.has(root) && busy === 0) {
+    stopping.delete(root);
+    const text = `Queue stopped — ${waiting} waiting`;
+    useTasks.getState().setNotice(`${name}: ${text}. Resume it from the board header.`);
+    void notifyTask(`${name} · ${text}`, "The running agents have finished.");
+  }
+  if (busy > 0 || waiting > 0) hadWork.add(root);
+  else if (hadWork.delete(root) && !state.board.settings.paused) {
+    void notifyTask(`${name} · run queue finished`, "Every queued task has been worked on.");
+  }
+}
+
+export async function stopAgent(root: string, id: string, opts: { pump?: boolean } = {}): Promise<void> {
   root = trim(root);
   const task = taskById(root, id);
   if (!task) return;
@@ -218,7 +349,9 @@ export async function stopAgent(root: string, id: string): Promise<void> {
     }
   }
   await useTasks.getState().update(root, id, { agent: "idle", paneId: "", log: task.agent === "queued" ? "Removed from the agent queue" : "Agent stopped by user" });
-  void pumpQueue(root);
+  const st = useTasks.getState().boards[root]?.state;
+  if (st?.board.runQueue?.includes(id)) await useTasks.getState().setQueue(root, st.board.runQueue.filter((x) => x !== id));
+  if (opts.pump !== false) void pumpQueue(root);
 }
 
 export function openAgentTerminal(root: string, id: string): boolean {
@@ -233,19 +366,32 @@ export function openAgentTerminal(root: string, id: string): boolean {
   return true;
 }
 
-/** Start queued tasks while there are free agent slots. */
+/** Start whatever the scheduler says may start now (run mode, free slots, dependencies,
+ *  file conflicts, pause). */
 const pumping = new Set<string>();
 export async function pumpQueue(root: string): Promise<void> {
   root = trim(root);
   if (pumping.has(root)) return;
   pumping.add(root);
   try {
-    for (;;) {
+    for (let guard = 0; guard < 32; guard++) {
       const state = useTasks.getState().boards[root]?.state;
       if (!state || !projectForRoot(root)) return;
-      if (busyCount(state) >= Math.max(1, state.board.settings.maxAgents || 1)) return;
-      const next = state.tasks.filter((t) => t.agent === "queued").sort((a, b) => a.updated.localeCompare(b.updated))[0];
-      if (!next || !(await launch(root, next))) return;
+      const input = schedInput(state, oneShot.has(root));
+      const r = schedule(input);
+      if (!r.start.length) {
+        checkDrained(root, state);
+        return;
+      }
+      if (oneShot.delete(root)) useTasks.getState().setNotice("Started the next task; the queue stays stopped.");
+      const rest = input.queue.filter((id) => !r.start.includes(id));
+      await useTasks.getState().setQueue(root, rest, r.batch);
+      let launched = 0;
+      for (const id of r.start) {
+        const t = state.tasks.find((x) => x.id === id);
+        if (t && (await launch(root, t))) launched++;
+      }
+      if (!launched) return;
     }
   } finally {
     pumping.delete(root);
@@ -297,6 +443,19 @@ async function refreshInstalledSkill() {
 
 // ---------------- runtime ----------------
 
+/** Collect new Inbox cards for a moment so a burst of captures shares one planner. */
+const planBuffer = new Map<string, { ids: Set<string>; timer: number }>();
+function schedulePlan(root: string, ids: string[]) {
+  const cur = planBuffer.get(root) ?? { ids: new Set<string>(), timer: 0 };
+  ids.forEach((id) => cur.ids.add(id));
+  window.clearTimeout(cur.timer);
+  cur.timer = window.setTimeout(() => {
+    planBuffer.delete(root);
+    void planTasks(root, [...cur.ids]);
+  }, 2500);
+  planBuffer.set(root, cur);
+}
+
 let runtimeInstalled = false;
 /** Auto-pickup prompts, queue pumping and pane-death reaping. Call once (TasksHost). */
 export function installAgentRuntime(): () => void {
@@ -305,13 +464,22 @@ export function installAgentRuntime(): () => void {
   window.setTimeout(() => void refreshInstalledSkill(), 3000);
 
   const offLoad = onBoardLoaded((root, prev, next) => {
-    // Ask to start Claude when a task (newly) enters Todo. Never on the first load of a board.
-    if (prev && next.board.settings.askOnTodo && projectForRoot(root)) {
+    // Never on the first load of a board.
+    if (prev && projectForRoot(root)) {
       const before = new Map(prev.tasks.map((t) => [t.id, t.status]));
-      for (const t of next.tasks) {
-        if (t.status === "todo" && before.get(t.id) !== "todo" && (t.agent === "idle" || !t.agent)) {
-          useTasks.getState().pushPrompt({ root, taskId: t.id, title: t.title });
-        }
+      const idle = (t: Task) => t.agent === "idle" || !t.agent;
+      const s = next.board.settings;
+      // A task (newly) entered Todo: ask, or queue it right away.
+      const entered = next.tasks.filter((t) => t.status === "todo" && before.get(t.id) !== "todo" && idle(t));
+      if (entered.length && s.autoPickup === "ask") {
+        for (const t of entered) useTasks.getState().pushPrompt({ root, taskId: t.id, title: t.title });
+      } else if (entered.length && s.autoPickup === "auto") {
+        void enqueue(root, entered.map((t) => t.id));
+      }
+      // New Inbox cards get a planner.
+      if (s.inboxAutoPlan && !s.paused) {
+        const fresh = next.tasks.filter((t) => !before.has(t.id) && t.status === "inbox" && idle(t));
+        if (fresh.length) schedulePlan(root, fresh.map((t) => t.id));
       }
     }
     // A task that left Todo / got an agent no longer needs its prompt.

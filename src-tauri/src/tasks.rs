@@ -41,6 +41,8 @@ pub struct Task {
     pub branch: String,
     pub commits: Vec<String>,
     pub pane_id: String,
+    /// Tasks that must reach Review/Done before this one may start (`depends: [T-3]`).
+    pub depends: Vec<String>,
     /// Frontmatter keys we don't know, kept verbatim (key, raw value).
     pub extra: Vec<(String, String)>,
     /// Body text before the agent sections.
@@ -59,17 +61,58 @@ pub struct Column {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct BoardSettings {
-    /// Offer to start Claude when a task enters Todo.
-    pub ask_on_todo: bool,
+    /// Old boolean form of `auto_pickup` (`true` = "ask"); read for migration, never written.
+    #[serde(skip_serializing)]
+    pub ask_on_todo: Option<bool>,
+    /// What happens when a task enters Todo: "off" | "ask" | "auto" (queue and start).
+    pub auto_pickup: String,
+    /// Where a task joins the run queue: "end" | "front" | "priority".
+    pub pickup_position: String,
+    /// New Inbox tasks get a planning agent automatically.
+    pub inbox_auto_plan: bool,
     /// Concurrent agents per board; the rest are queued.
     pub max_agents: u32,
+    /// "rolling" (keep max_agents busy) | "batch" (start batch_size, wait for all) |
+    /// "parallel-safe" (start non-conflicting groups by the plans' Files lines).
+    pub run_mode: String,
+    pub batch_size: u32,
+    /// Queue stopped: running agents finish, no new ones start.
+    pub paused: bool,
     /// Share `.tcon/` via git (no `.git/info/exclude` entry).
     pub shared: bool,
 }
 
 impl Default for BoardSettings {
     fn default() -> Self {
-        Self { ask_on_todo: false, max_agents: 1, shared: false }
+        Self {
+            ask_on_todo: None,
+            auto_pickup: "off".into(),
+            pickup_position: "end".into(),
+            inbox_auto_plan: false,
+            max_agents: 1,
+            run_mode: "rolling".into(),
+            batch_size: 2,
+            paused: false,
+            shared: false,
+        }
+    }
+}
+
+impl BoardSettings {
+    /// Fill in defaults / migrate the old `askOnTodo` flag and clamp numbers.
+    fn normalize(mut self) -> Self {
+        if let Some(ask) = self.ask_on_todo.take() {
+            if ask && (self.auto_pickup.is_empty() || self.auto_pickup == "off") {
+                self.auto_pickup = "ask".into();
+            }
+        }
+        let pick = |v: &str, allowed: &[&str]| if allowed.contains(&v) { v.to_string() } else { allowed[0].to_string() };
+        self.auto_pickup = pick(&self.auto_pickup, &["off", "ask", "auto"]);
+        self.pickup_position = pick(&self.pickup_position, &["end", "front", "priority"]);
+        self.run_mode = pick(&self.run_mode, &["rolling", "batch", "parallel-safe"]);
+        self.max_agents = self.max_agents.clamp(1, 16);
+        self.batch_size = self.batch_size.clamp(1, 16);
+        self
     }
 }
 
@@ -82,6 +125,10 @@ pub struct Board {
     pub order: BTreeMap<String, Vec<String>>,
     pub next_id: u32,
     pub settings: BoardSettings,
+    /// Task ids waiting for an agent, in start order.
+    pub run_queue: Vec<String>,
+    /// Batch run mode: the ids started together in the current batch.
+    pub batch: Vec<String>,
 }
 
 impl Default for Board {
@@ -93,6 +140,8 @@ impl Default for Board {
             order: BTreeMap::new(),
             next_id: 1,
             settings: BoardSettings::default(),
+            run_queue: Vec::new(),
+            batch: Vec::new(),
         }
     }
 }
@@ -122,6 +171,7 @@ pub struct TaskPatch {
     pub agent: Option<String>,
     pub branch: Option<String>,
     pub pane_id: Option<String>,
+    pub depends: Option<Vec<String>>,
     pub description: Option<String>,
     /// Line appended to `## Progress log`.
     pub log: Option<String>,
@@ -368,6 +418,7 @@ pub fn parse_task(text: &str, fallback_id: &str) -> Task {
                     "branch" => t.branch = unquote(&raw),
                     "commits" => t.commits = parse_list(&raw),
                     "pane" | "paneId" => t.pane_id = unquote(&raw),
+                    "depends" | "dependsOn" => t.depends = parse_list(&raw),
                     _ => t.extra.push((key, raw)),
                 }
             }
@@ -416,6 +467,9 @@ pub fn serialize_task(t: &Task) -> String {
     kv(&mut s, "branch", &quote(&t.branch));
     kv(&mut s, "commits", &fmt_list(&t.commits));
     kv(&mut s, "pane", &quote(&t.pane_id));
+    if !t.depends.is_empty() {
+        kv(&mut s, "depends", &fmt_list(&t.depends));
+    }
     for (k, v) in &t.extra {
         kv(&mut s, k, v);
     }
@@ -481,7 +535,7 @@ fn read_board(root: &str) -> Board {
                 b.columns = Board::default().columns;
             }
             b.next_id = b.next_id.max(1);
-            b.settings.max_agents = b.settings.max_agents.clamp(1, 16);
+            b.settings = b.settings.normalize();
             b
         })
         .unwrap_or_default()
@@ -710,6 +764,9 @@ pub fn update(root: &str, id: &str, patch: TaskPatch) -> Result<Task, String> {
     if let Some(v) = patch.pane_id {
         t.pane_id = v;
     }
+    if let Some(v) = patch.depends {
+        t.depends = v.into_iter().map(|d| d.trim().to_string()).filter(|d| !d.is_empty()).collect();
+    }
     if let Some(v) = patch.description {
         t.description = v.trim().to_string();
     }
@@ -753,7 +810,7 @@ pub fn delete(root: &str, id: &str) -> Result<(), String> {
     }
     let mut board = read_board(root);
     let mut changed = false;
-    for v in board.order.values_mut() {
+    for v in board.order.values_mut().chain([&mut board.run_queue, &mut board.batch]) {
         let before = v.len();
         v.retain(|x| x != id);
         changed |= v.len() != before;
@@ -768,11 +825,26 @@ pub fn save_settings(root: &str, settings: BoardSettings) -> Result<Board, Strin
     let _g = LOCK.lock();
     let mut board = ensure_init(root)?;
     let shared_changed = board.settings.shared != settings.shared;
-    board.settings = BoardSettings { max_agents: settings.max_agents.clamp(1, 16), ..settings };
+    board.settings = settings.normalize();
     write_board(root, &board)?;
     if shared_changed {
         apply_exclude(root, board.settings.shared)?;
     }
+    Ok(board)
+}
+
+/// Replace the run queue (and the current batch). Unknown ids are dropped.
+pub fn set_queue(root: &str, queue: Vec<String>, batch: Option<Vec<String>>) -> Result<Board, String> {
+    let _g = LOCK.lock();
+    let mut board = ensure_init(root)?;
+    let (tasks, _) = read_tasks(root);
+    let known: HashSet<&str> = tasks.iter().map(|t| t.id.as_str()).collect();
+    let mut seen = HashSet::new();
+    board.run_queue = queue.into_iter().filter(|id| known.contains(id.as_str()) && seen.insert(id.clone())).collect();
+    if let Some(b) = batch {
+        board.batch = b.into_iter().filter(|id| known.contains(id.as_str())).collect();
+    }
+    write_board(root, &board)?;
     Ok(board)
 }
 
@@ -863,6 +935,11 @@ pub async fn tasks_save_settings(root: String, settings: BoardSettings) -> Resul
 }
 
 #[tauri::command]
+pub async fn tasks_set_queue(root: String, queue: Vec<String>, batch: Option<Vec<String>>) -> Result<Board, String> {
+    blocking(move || set_queue(&root, queue, batch)).await
+}
+
+#[tauri::command]
 pub async fn tasks_refresh_skill(config_dirs: Vec<String>) -> Result<Vec<String>, String> {
     blocking(move || refresh_skill(&config_dirs)).await
 }
@@ -897,6 +974,7 @@ mod tests {
             branch: "feat/x".into(),
             commits: vec!["abc1234".into()],
             pane_id: "p1".into(),
+            depends: vec!["T-1".into()],
             extra: vec![("estimate".into(), "3".into())],
             description: "Users report a loop.\n\n## Notes from the meeting\n- happens on Safari".into(),
             sections: "## Plan\n1. look\n\n## Progress log\n- 2026-11-27 10:00 — Created\n\n## Verification".into(),
@@ -1015,6 +1093,33 @@ mod tests {
         assert!(s.starts_with("# git ls-files --others\n*.log\n"));
         set_exclude_in(&p, false).unwrap();
         assert_eq!(fs::read_to_string(&p).unwrap(), "# git ls-files --others\n*.log\n");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn settings_migrate_and_normalize() {
+        let b: Board = serde_json::from_str(r#"{"settings":{"askOnTodo":true,"maxAgents":40,"runMode":"weird"}}"#).unwrap();
+        let s = b.settings.normalize();
+        assert_eq!(s.auto_pickup, "ask");
+        assert_eq!(s.max_agents, 16);
+        assert_eq!(s.run_mode, "rolling");
+        assert_eq!(s.pickup_position, "end");
+        let json = serde_json::to_string(&s).unwrap();
+        assert!(!json.contains("askOnTodo"));
+        let b: Board = serde_json::from_str(r#"{"settings":{"askOnTodo":false,"autoPickup":"auto"}}"#).unwrap();
+        assert_eq!(b.settings.normalize().auto_pickup, "auto");
+    }
+
+    #[test]
+    fn queue_keeps_known_ids_once() {
+        let root = tmp("queue");
+        let r = root.to_string_lossy().to_string();
+        create(&r, "A", "", "todo").unwrap();
+        create(&r, "B", "", "todo").unwrap();
+        let b = set_queue(&r, vec!["T-2".into(), "T-9".into(), "T-1".into(), "T-2".into()], Some(vec!["T-1".into()])).unwrap();
+        assert_eq!(b.run_queue, vec!["T-2", "T-1"]);
+        assert_eq!(b.batch, vec!["T-1"]);
+        assert_eq!(load(&r).board.run_queue, vec!["T-2", "T-1"]);
         let _ = fs::remove_dir_all(root);
     }
 

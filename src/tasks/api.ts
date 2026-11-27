@@ -14,6 +14,7 @@ export const tasksApi = {
   move: (root: string, id: string, column: string, index: number) => invoke<BoardState>("task_move", { root, id, column, index }),
   remove: (root: string, id: string) => invoke<void>("task_delete", { root, id }),
   saveSettings: (root: string, settings: BoardSettings) => invoke<Board>("tasks_save_settings", { root, settings }),
+  setQueue: (root: string, queue: string[], batch?: string[]) => invoke<Board>("tasks_set_queue", { root, queue, batch: batch ?? null }),
   installSkill: (configDirs: string[]) => invoke<string[]>("tasks_install_skill", { configDirs }),
   refreshSkill: (configDirs: string[]) => invoke<string[]>("tasks_refresh_skill", { configDirs }),
 };

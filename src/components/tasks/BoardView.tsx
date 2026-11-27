@@ -13,7 +13,7 @@ import {
   AgentChip, ClaudeMark, Labels, PriorityIcon, StatusIcon, TASK_DRAG, adjustedIndex, dropIndexFor, readDrag, relTime, type DragPayload,
 } from "./parts";
 import { Icon } from "../icons";
-import { Toggle } from "../ui";
+import { QueueControl, RunQueuePanel, queueCounts } from "./RunQueue";
 import "./tasks.css";
 
 const isTyping = (t: EventTarget | null) => {
@@ -37,6 +37,7 @@ export function BoardView({ project }: { project: Project }) {
   const [filter, setFilter] = useState("");
   const [drop, setDrop] = useState<{ column: string; index: number } | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [queueOpen, setQueueOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const filterRef = useRef<HTMLInputElement>(null);
   const menu = useContextMenu();
@@ -199,14 +200,18 @@ export function BoardView({ project }: { project: Project }) {
             }}
           />
         </div>
+        {state && <QueueControl root={root} state={state} />}
         {state && (
-          <span className="tkb-autopickup" title="When a task moves to Todo, ask whether Claude should start on it">
-            <Toggle
-              checked={state.board.settings.askOnTodo}
-              onChange={(v) => void useTasks.getState().saveSettings(root, { askOnTodo: v })}
-              label="Auto-pickup"
-            />
-          </span>
+          <button
+            className={`btn small ghost${queueOpen ? " on" : ""}`}
+            title="Run queue: auto-pickup, run mode, order"
+            aria-expanded={queueOpen}
+            onClick={() => setQueueOpen((v) => !v)}
+          >
+            <Icon name="queue" size={14} />
+            Queue{queueCounts(state).queued > 0 ? ` · ${queueCounts(state).queued}` : ""}
+            {state.board.settings.autoPickup === "auto" && <span className="tkb-auto-badge" title="Tasks entering Todo are queued automatically">auto</span>}
+          </button>
         )}
         <button className="btn small primary" title="New task (N)" onClick={() => setAdding(columns[0]?.id ?? "inbox")}>
           <Icon name="plus" size={14} />
@@ -326,6 +331,7 @@ export function BoardView({ project }: { project: Project }) {
         <span><kbd>Esc</kbd> close</span>
       </div>
 
+      {queueOpen && state && <RunQueuePanel root={root} state={state} onClose={() => { setQueueOpen(false); focusBoard(); }} />}
       {openTask && state && <TaskDrawer key={openTask.id} root={root} task={openTask} state={state} onClose={close} />}
       {menu.element}
     </div>

@@ -6,7 +6,7 @@ import { useEffect } from "react";
 import { create } from "zustand";
 import { listen } from "@tauri-apps/api/event";
 import { hasBackend, tasksApi } from "./api";
-import type { BoardSettings, BoardState, Task, TaskPatch } from "./types";
+import { DEFAULT_SETTINGS, type BoardSettings, type BoardState, type Task, type TaskPatch } from "./types";
 import type { FsChangedEvent } from "../types";
 import { onRefresh } from "../refresh";
 import { parseQuickInput } from "../quick/parse";
@@ -44,6 +44,8 @@ interface TasksState {
   move(root: string, id: string, column: string, index: number): Promise<void>;
   remove(root: string, id: string): Promise<void>;
   saveSettings(root: string, patch: Partial<BoardSettings>): Promise<void>;
+  /** Replace the run queue (and optionally the current batch). */
+  setQueue(root: string, queue: string[], batch?: string[]): Promise<void>;
   setOpenTask(root: string, id: string | null): void;
   requestCapture(): void;
   pushPrompt(p: Omit<AgentPrompt, "key">): void;
@@ -222,7 +224,7 @@ export const useTasks = create<TasksState>((set, get) => {
     async saveSettings(root, patch) {
       root = trim(root);
       const st = get().boards[root]?.state;
-      const settings: BoardSettings = { askOnTodo: false, maxAgents: 1, shared: false, ...st?.board.settings, ...patch };
+      const settings: BoardSettings = { ...DEFAULT_SETTINGS, ...st?.board.settings, ...patch };
       if (st) setEntry(root, { state: { ...st, board: { ...st.board, settings } } });
       try {
         await tasksApi.saveSettings(root, settings);
@@ -230,6 +232,20 @@ export const useTasks = create<TasksState>((set, get) => {
         fail(e);
       }
       void get().load(root);
+    },
+
+    async setQueue(root, queue, batch) {
+      root = trim(root);
+      const st = get().boards[root]?.state;
+      if (st) setEntry(root, { state: { ...st, board: { ...st.board, runQueue: queue, batch: batch ?? st.board.batch } } });
+      try {
+        const board = await tasksApi.setQueue(root, queue, batch);
+        const cur = get().boards[root]?.state;
+        if (cur) setEntry(root, { state: { ...cur, board: { ...cur.board, runQueue: board.runQueue, batch: board.batch } } });
+      } catch (e) {
+        fail(e);
+        void get().load(root);
+      }
     },
 
     setOpenTask(root, id) {

@@ -18,6 +18,8 @@ export interface Task {
   commits: string[];
   /** tCon terminal pane running the agent ("" = none) */
   paneId: string;
+  /** tasks that must reach Review/Done first */
+  depends: string[];
   extra: [string, string][];
   /** body before the agent sections */
   description: string;
@@ -27,11 +29,34 @@ export interface Task {
 
 export interface Column { id: string; title: string }
 
+export type AutoPickup = "off" | "ask" | "auto";
+export type PickupPosition = "end" | "front" | "priority";
+
 export interface BoardSettings {
-  askOnTodo: boolean;
+  /** what happens when a task enters Todo */
+  autoPickup: AutoPickup;
+  /** where it joins the run queue */
+  pickupPosition: PickupPosition;
+  /** new Inbox cards get a planning agent */
+  inboxAutoPlan: boolean;
   maxAgents: number;
+  runMode: "rolling" | "batch" | "parallel-safe";
+  batchSize: number;
+  /** queue stopped: running agents finish, none start */
+  paused: boolean;
   shared: boolean;
 }
+
+export const DEFAULT_SETTINGS: BoardSettings = {
+  autoPickup: "off",
+  pickupPosition: "end",
+  inboxAutoPlan: false,
+  maxAgents: 1,
+  runMode: "rolling",
+  batchSize: 2,
+  paused: false,
+  shared: false,
+};
 
 export interface Board {
   version: number;
@@ -39,6 +64,10 @@ export interface Board {
   order: Record<string, string[]>;
   nextId: number;
   settings: BoardSettings;
+  /** task ids waiting for an agent, in start order */
+  runQueue: string[];
+  /** batch run mode: ids of the current batch */
+  batch: string[];
 }
 
 export interface BoardState {
@@ -58,6 +87,7 @@ export interface TaskPatch {
   agent?: string;
   branch?: string;
   paneId?: string;
+  depends?: string[];
   description?: string;
   /** line appended to "## Progress log" */
   log?: string;
