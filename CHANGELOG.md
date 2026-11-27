@@ -8,6 +8,7 @@ Each release's section becomes its GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- Live agent status: the status bar shows how many task agents are running, planning, need you or are queued, across every project; click it for each agent's task, phase (Planning, Implementing, Verifying…), time and what Claude is doing, with Open terminal / Stop buttons and Stop all / Resume all. Boards show a strip of their active agents, and cards show the phase. Agents that get blocked, fail or finish send a desktop notification while tCon is in the background.
 - Tasks: select several cards (⌘/Ctrl-click, ⇧-click for a range, ⌘A or the column checkbox for a whole column) on the board or in the Tasks sidebar, then plan them with Claude, start Claude, add them to the queue, set their priority, move or delete them at once. **Tasks: Plan Inbox with Claude** plans every Inbox card.
 - Tasks: a **run queue** per board (Queue button in the board header). Reorder it by dragging, see why each task waits and which tasks start together, and pick a run mode: **Rolling** (keep the agent limit busy), **Batches** (start N, wait for all, then the next N) or **Parallel-safe** (start tasks together whose plans touch different files; tasks without a plan run alone). Tasks wait for their `depends:` tasks to reach Review or Done.
 - Tasks: **Stop after current** lets running agents finish while no new ones start; then **Resume**, or **Next only** to start exactly one. **Stop all now** stops every agent of the board. Also in the command palette, for one board or all of them.

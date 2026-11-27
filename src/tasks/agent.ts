@@ -443,6 +443,19 @@ async function refreshInstalledSkill() {
 
 // ---------------- runtime ----------------
 
+/** Desktop notifications when an agent gets blocked, fails or finishes (written by Claude). */
+function notifyTransitions(root: string, prev: BoardState, next: BoardState) {
+  const before = new Map(prev.tasks.map((t) => [t.id, t.agent]));
+  const name = projectForRoot(root)?.name ?? root;
+  for (const t of next.tasks) {
+    const was = before.get(t.id);
+    if (was === undefined || was === t.agent) continue;
+    if (t.agent === "blocked") void notifyTask(`${name} · ${t.id} needs you`, t.title);
+    else if (t.agent === "failed") void notifyTask(`${name} · ${t.id} failed`, t.title);
+    else if (t.agent === "done" && (was === "running" || was === "blocked")) void notifyTask(`${name} · ${t.id} is ready for review`, t.title);
+  }
+}
+
 /** Collect new Inbox cards for a moment so a burst of captures shares one planner. */
 const planBuffer = new Map<string, { ids: Set<string>; timer: number }>();
 function schedulePlan(root: string, ids: string[]) {
@@ -482,6 +495,7 @@ export function installAgentRuntime(): () => void {
         if (fresh.length) schedulePlan(root, fresh.map((t) => t.id));
       }
     }
+    if (prev) notifyTransitions(root, prev, next);
     // A task that left Todo / got an agent no longer needs its prompt.
     for (const p of useTasks.getState().prompts) {
       if (p.root !== root) continue;

@@ -15,6 +15,7 @@ import {
 import { Icon } from "../icons";
 import { QueueControl, RunQueuePanel, queueCounts } from "./RunQueue";
 import { BulkBar } from "./BulkBar";
+import { AgentStrip, PhaseChip } from "./AgentStatus";
 import "./tasks.css";
 
 const isTyping = (t: EventTarget | null) => {
@@ -279,6 +280,7 @@ export function BoardView({ project }: { project: Project }) {
         </button>
       </div>
 
+      <AgentStrip root={root} />
       {error && <div className="tkb-error">{error}</div>}
       {!state && loading && <div className="tkb-empty">Loading…</div>}
 
@@ -461,7 +463,11 @@ function Card(props: {
           )}
         </div>
       )}
-      <div className="tkb-card-foot" title={`Updated ${task.updated}`}>{relTime(task.updated || task.created)}</div>
+      <div className="tkb-card-foot" title={`Updated ${task.updated}`}>
+        {relTime(task.updated || task.created)}
+        <span className="sb-spacer" />
+        <PhaseChip task={task} />
+      </div>
     </div>
   );
 }
