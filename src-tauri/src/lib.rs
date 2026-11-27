@@ -1,7 +1,7 @@
 mod db;
 mod fs;
 mod git;
-mod osc;
+pub mod osc;
 mod pty;
 
 use db::{Db, Profile, RecentPath};
@@ -83,6 +83,42 @@ fn home_dir() -> String {
     dirs::home_dir().map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|| "/".into())
 }
 
+/// Custom menu: like the default, but without "Close Window" (⌘W closes panes here).
+fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
+    use tauri::menu::{Menu, PredefinedMenuItem as P, Submenu};
+    let app_menu = Submenu::with_items(
+        app,
+        "tCon",
+        true,
+        &[
+            &P::about(app, None, None)?,
+            &P::separator(app)?,
+            &P::hide(app, None)?,
+            &P::hide_others(app, None)?,
+            &P::show_all(app, None)?,
+            &P::separator(app)?,
+            &P::quit(app, None)?,
+        ],
+    )?;
+    let edit = Submenu::with_items(
+        app,
+        "Edit",
+        true,
+        &[
+            &P::undo(app, None)?,
+            &P::redo(app, None)?,
+            &P::separator(app)?,
+            &P::cut(app, None)?,
+            &P::copy(app, None)?,
+            &P::paste(app, None)?,
+            &P::select_all(app, None)?,
+        ],
+    )?;
+    let view = Submenu::with_items(app, "View", true, &[&P::fullscreen(app, None)?])?;
+    let window = Submenu::with_items(app, "Window", true, &[&P::minimize(app, None)?, &P::maximize(app, None)?])?;
+    Menu::with_items(app, &[&app_menu, &edit, &view, &window])
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -94,6 +130,7 @@ pub fn run() {
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             app.manage(Db::open(&dir)?);
+            app.set_menu(build_menu(app.handle())?)?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

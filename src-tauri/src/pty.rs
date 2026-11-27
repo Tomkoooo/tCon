@@ -129,10 +129,14 @@ impl PtyManager {
                 }
             }
             let code = child2.lock().wait().ok().map(|s| s.exit_code());
-            let _ = app.emit("pane-exit", ExitEvent { pane_id: pane_id.clone(), code });
             if let Some(state) = tauri::Manager::try_state::<PtyManager>(&app) {
-                state.sessions.lock().remove(&pane_id);
+                let mut sessions = state.sessions.lock();
+                // Only remove if the map still holds *this* session (not a respawn).
+                if sessions.get(&pane_id).is_some_and(|s| Arc::ptr_eq(&s.child, &child2)) {
+                    sessions.remove(&pane_id);
+                }
             }
+            let _ = app.emit("pane-exit", ExitEvent { pane_id: pane_id.clone(), code });
         })?;
 
         self.sessions.lock().insert(opts.pane_id, Session { writer, master: pair.master, child });
