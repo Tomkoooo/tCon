@@ -2,6 +2,7 @@ mod appicon;
 mod background;
 mod browser;
 mod cli;
+mod clipboard;
 mod db;
 mod fs;
 mod git;
@@ -186,6 +187,7 @@ pub fn run() {
         .invoke_handler(background::guard_invoke(browser::guard_invoke(tauri::generate_handler![
             appicon::app_set_icon,
             appicon::app_icon_preview,
+            clipboard::clipboard_file_paths,
             pty_spawn,
             pty_write,
             pty_resize,

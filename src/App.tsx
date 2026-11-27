@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useWorkspace } from "./store/workspace";
 import { notifyPaneStatus } from "./notify";
+import { installFileDrop } from "./terminal/fileDrop";
 import { scheduleGitRefresh } from "./store/gitRefresh";
 import { installFocusRefresh, onRefresh } from "./refresh";
 import type { FsChangedEvent, ProgramStatus } from "./types";
@@ -44,10 +45,12 @@ function useBackendEvents() {
       for (const p of Object.values(useWorkspace.getState().projects)) scheduleGitRefresh(p.id, 0);
     });
     const offFocus = installFocusRefresh();
+    const offDrop = installFileDrop();
     return () => {
       unsubs.forEach((u) => u.then((f) => f()));
       offRefresh();
       offFocus();
+      offDrop();
     };
   }, []);
 }

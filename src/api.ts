@@ -36,6 +36,8 @@ export const api = {
   settingGet: (key: string) => invoke<string | null>("setting_get", { key }),
   settingSet: (key: string, value: string) => invoke<void>("setting_set", { key, value }),
   homeDir: () => invoke<string>("home_dir"),
+  /** Full paths of files copied in Finder (macOS; empty otherwise). */
+  clipboardFilePaths: () => invoke<string[]>("clipboard_file_paths"),
 
   // Git
   gitStatus: (path: string) => invoke<GitStatus>("git_status", { path }),

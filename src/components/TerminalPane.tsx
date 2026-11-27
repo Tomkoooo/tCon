@@ -40,6 +40,7 @@ export function TerminalPane({ projectId, pane, status, focused, showHeader, acc
   return (
     <div
       className={`pane${focused ? " focused" : ""}${status?.state === "blocked" ? " attn" : ""}`}
+      data-pane-id={pane.id}
       style={{ ["--pane-accent" as string]: accent }}
       onMouseDown={() => focusPane(projectId, pane.id)}
       onContextMenu={onContextMenu}
