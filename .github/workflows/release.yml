@@ -201,7 +201,7 @@ jobs:
       # createUpdaterArtifacts (tauri.conf.json) + the signing key make the bundler emit the
       # updater bundles (macOS .app.tar.gz, Linux AppImage/deb/rpm) with .sig files, which
       # tauri-action uploads. latest.json is written once by the publish job instead
-      # (includeUpdaterJson: false), so parallel jobs can't overwrite each other's platforms.
+      # (uploadUpdaterJson: false), so parallel jobs can't overwrite each other's platforms.
       - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -209,7 +209,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           releaseId: ${{ needs.prepare.outputs.release_id }}
-          includeUpdaterJson: false
+          uploadUpdaterJson: false
           args: ${{ matrix.args }}
 
   publish:
