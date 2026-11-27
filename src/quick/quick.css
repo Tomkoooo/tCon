@@ -196,8 +196,8 @@
 .qp-agent-failed { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
 .qp-st { flex: none; color: var(--fg-dim); }
 .qp-st-in-progress { color: var(--warn); }
-.qp-st-review { color: var(--accent); }
-.qp-st-done { color: var(--ok); }
+.qp-st-review { color: var(--ok); }
+.qp-st-done { color: var(--accent); }
 
 /* footer */
 .qp-foot {

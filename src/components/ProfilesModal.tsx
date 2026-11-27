@@ -84,7 +84,7 @@ export function ProfilesModal() {
               }}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden><path d={s.icon} fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" strokeLinecap="round" /></svg>
-              {s.label}
+              <span className="settings-nav-label">{s.label}</span>
             </button>
           ))}
         </nav>

@@ -328,7 +328,7 @@ details.advanced > summary::-webkit-details-marker { display: none; }
 .modal.settings-modal { width: 900px; height: 640px; }
 .settings-layout { flex: 1; min-height: 0; display: flex; }
 .settings-nav {
-  flex: none; width: 200px; padding: var(--sp-3) var(--sp-2); display: flex; flex-direction: column; gap: 2px; overflow: auto;
+  flex: none; width: 216px; padding: var(--sp-3) var(--sp-2); display: flex; flex-direction: column; gap: 2px; overflow: auto;
   border-right: 1px solid var(--border); border-bottom-left-radius: var(--radius-l);
 }
 .settings-search { width: 100%; margin-bottom: var(--sp-2); flex: none; }
@@ -338,6 +338,7 @@ details.advanced > summary::-webkit-details-marker { display: none; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .settings-nav-item svg { flex: none; }
+.settings-nav-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .settings-nav-item:hover { background: var(--list-hover-bg, var(--bg-3)); color: var(--fg); }
 .settings-nav-item.on { background: var(--list-active-bg, var(--bg-3)); color: var(--list-active-fg, var(--fg)); }
 .settings-content { flex: 1; min-width: 0; overflow: auto; padding: 0 var(--sp-6) var(--sp-6); }

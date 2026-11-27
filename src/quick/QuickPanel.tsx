@@ -418,7 +418,10 @@ function StatusGlyph({ status }: { status: string }) {
   return (
     <svg className={`qp-st qp-st-${status}`} width="12" height="12" viewBox="0 0 14 14" aria-hidden>
       {status === "done" ? (
-        <circle cx="7" cy="7" r="6.5" fill="currentColor" />
+        <>
+          <circle cx="7" cy="7" r="6.5" fill="currentColor" />
+          <path d="M4.3 7.2l1.8 1.8 3.6-3.8" fill="none" stroke="var(--bg)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </>
       ) : (
         <>
           <circle cx="7" cy="7" r={r} fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray={status === "inbox" ? "2 1.6" : undefined} />
