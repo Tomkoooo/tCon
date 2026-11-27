@@ -69,6 +69,9 @@ decrypted).
   - IPC is limited to the `main` webview at the app's own origin. tCon's own commands go
     through Tauri's permission system too (`src-tauri/build.rs`). Remote pages and child
     webviews, such as the built-in browser, get no IPC at all.
+  - The quick panel window (the global shortcut's task inbox) has its own capability
+    (`capabilities/quick.json`): it can read a task board, add tasks, list projects and hide
+    itself, nothing else. No terminals, files, git or settings.
   - Links open only as `http(s)://` or `mailto:`. tCon never asks the OS to "open" a local
     file, because that could launch an app or script. It only reveals files in Finder.
 - **Casual secret access from the UI.** The file tree and editor refuse `~/.ssh`,

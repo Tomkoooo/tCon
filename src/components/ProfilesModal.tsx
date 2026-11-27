@@ -14,6 +14,7 @@ import { Modal } from "./Modal";
 import { AccountAvatar, accountOrg } from "./AccountChip";
 import { AppearanceSection, KeybindingsSection, TerminalSection, openConfigInEditor } from "./AppearanceSettings";
 import { SecuritySection } from "./SecuritySettings";
+import { BackgroundSection } from "./BackgroundSettings";
 import { SettingRow, SettingsGroup, SettingsSearch, SettingsSection } from "./settingsKit";
 import { BrowserSection } from "./browser/BrowserSettings";
 import { Badge, CommitInput, Segmented } from "./ui";
@@ -25,6 +26,7 @@ const SECTIONS = [
   { id: "appearance", label: "Appearance", icon: "M8 1.5a6.5 6.5 0 1 0 0 13c.8 0 1.2-.5 1.2-1.1 0-.8-.6-1-.6-1.7 0-.6.5-1 1.1-1H11a3.5 3.5 0 0 0 3.5-3.5C14.5 4 11.6 1.5 8 1.5z" },
   { id: "terminal", label: "Terminal", icon: "M2 3h12v10H2zM4.5 6l2 2-2 2M8 10.5h3.5" },
   { id: "browser", label: "Browser", icon: "M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM1.5 8h13M8 1.5c1.8 1.8 2.7 4 2.7 6.5S9.8 12.7 8 14.5C6.2 12.7 5.3 10.5 5.3 8S6.2 3.3 8 1.5z" },
+  { id: "background", label: "Quick panel & background", icon: "M2.5 3.5h11v9h-11zM5 6.5h6M5 9.5h3.5" },
   { id: "keyboard", label: "Keyboard Shortcuts", icon: "M1.5 4h13v8h-13zM4 6.5h1m2 0h1m2 0h1M4 9.5h8" },
   { id: "security", label: "Security", icon: "M8 1.5l5 2v4c0 3.2-2.2 5.6-5 7-2.8-1.4-5-3.8-5-7v-4zM5.8 8l1.6 1.6 2.9-3" },
   { id: "advanced", label: "Advanced", icon: "M3 4h10M3 8h10M3 12h10M6 2.5v3M10 6.5v3M5 10.5v3" },
@@ -91,6 +93,7 @@ export function ProfilesModal() {
             {show("appearance") && <AppearanceSection />}
             {show("terminal") && <TerminalSection />}
             {show("browser") && <BrowserSection />}
+            {show("background") && <BackgroundSection />}
             {show("keyboard") && <KeybindingsSection />}
             {show("security") && <SecuritySection />}
             {show("advanced") && <AdvancedSection />}

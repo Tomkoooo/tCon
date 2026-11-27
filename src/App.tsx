@@ -13,6 +13,7 @@ import { ProfilesModal } from "./components/ProfilesModal";
 import { ProjectSettingsModal } from "./components/ProjectSettingsModal";
 import { StatusBar } from "./components/StatusBar";
 import { TasksHost } from "./components/tasks/TasksHost";
+import { useBackgroundBridge } from "./background/bridge";
 import { useTheming } from "./theming/store";
 import { COMMAND_MAP, effectiveBindings, resolveKey } from "./commands";
 
@@ -126,6 +127,7 @@ export default function App() {
   useBackendEvents();
   useGitPolling();
   useDockBadge();
+  useBackgroundBridge();
   useShortcuts();
 
   return (

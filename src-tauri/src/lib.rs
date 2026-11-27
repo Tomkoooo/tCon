@@ -1,4 +1,5 @@
 mod appicon;
+mod background;
 mod browser;
 mod cli;
 mod db;
@@ -135,7 +136,16 @@ pub fn run() {
             w.devtools = Some(false);
         }
     }
+    // Started by the login item: only the tray icon shows (src/background.rs).
+    if background::started_hidden() {
+        for w in &mut context.config_mut().app.windows {
+            w.visible = false;
+        }
+    }
     tauri::Builder::default()
+        // Background mode (src/background.rs): global shortcut → quick panel, launch at login.
+        .plugin(background::shortcut_plugin())
+        .plugin(background::autostart_plugin())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
@@ -146,10 +156,20 @@ pub fn run() {
             let dir = app.path().app_data_dir()?;
             app.manage(Db::open(&dir)?);
             app.set_menu(build_menu(app.handle())?)?;
+            background::setup(app.handle())?;
             Ok(())
         })
+        // Closing the main window hides it while background mode is on.
+        .on_window_event(|w, ev| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = ev {
+                if w.label() == background::MAIN_LABEL {
+                    background::on_main_close(w, api);
+                }
+            }
+        })
         // browser::guard_invoke: pages in the integrated browser (`browser-*` webviews) never reach commands.
-        .invoke_handler(browser::guard_invoke(tauri::generate_handler![
+        // background::guard_invoke: the quick panel only reaches its own few commands.
+        .invoke_handler(background::guard_invoke(browser::guard_invoke(tauri::generate_handler![
             appicon::app_set_icon,
             appicon::app_icon_preview,
             pty_spawn,
@@ -200,6 +220,14 @@ pub fn run() {
             tasks::task_delete,
             tasks::tasks_save_settings,
             tasks::tasks_install_skill,
+            background::background_apply,
+            background::background_status,
+            background::background_check_shortcut,
+            background::quick_toggle,
+            background::tray_refresh,
+            background::quick_projects,
+            background::quick_hide,
+            background::quick_open,
             browser::builtin::browser_info,
             browser::builtin::browser_create,
             browser::builtin::browser_set_bounds,
@@ -217,12 +245,17 @@ pub fn run() {
             browser::chrome::chrome_link_native_hosts,
             browser::import::browser_import_sources,
             browser::import::browser_import,
-        ]))
+        ])))
         .build(context)
         .expect("error while building tauri application")
         .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
                 app.state::<PtyManager>().kill_all();
+            }
+            // Dock icon clicked while the main window is hidden.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { has_visible_windows: false, .. } = &event {
+                background::show_main(app);
             }
         });
 }
