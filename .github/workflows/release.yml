@@ -202,7 +202,7 @@ jobs:
       # updater bundles (macOS .app.tar.gz, Linux AppImage/deb/rpm) with .sig files, which
       # tauri-action uploads. latest.json is written once by the publish job instead
       # (includeUpdaterJson: false), so parallel jobs can't overwrite each other's platforms.
-      - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
+      - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
