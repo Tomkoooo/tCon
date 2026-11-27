@@ -244,6 +244,8 @@ pub fn run() {
             background::quick_projects,
             background::quick_hide,
             background::quick_open,
+            background::quick_start_drag,
+            background::quick_reset_position,
             browser::builtin::browser_info,
             browser::builtin::browser_create,
             browser::builtin::browser_set_bounds,

@@ -8,11 +8,17 @@
   overflow: hidden;
 }
 
+/* drag handle: the window has no title bar */
+.qp-grip { flex: none; height: 10px; display: flex; justify-content: center; align-items: flex-end; cursor: grab; }
+.qp-grip span { width: 36px; height: 4px; border-radius: 999px; background: var(--border); }
+.qp-grip:hover span { background: var(--fg-dim); }
+.qp-grip:active { cursor: grabbing; }
+
 /* project picker */
 .qp-projects {
   display: flex;
   gap: var(--sp-1, 4px);
-  padding: 10px 12px 6px;
+  padding: 4px 12px 6px;
   overflow-x: auto;
   scrollbar-width: none;
   flex: none;

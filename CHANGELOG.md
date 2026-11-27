@@ -7,6 +7,13 @@ Each release's section becomes its GitHub release notes.
 
 ## [Unreleased]
 
+### Added
+- Quick panel: drag it by its top edge, project bar or footer to move it. It reopens where you left it; double-click the handle to centre it again.
+
+### Fixed
+- Tasks: `#label` and `!priority` in a task title now work in the Tasks sidebar box and the board's inline add too, not only in the quick panel.
+- Board: adding several cards in a row (⇧↵) no longer scrolls the column to the new card, so the input stays in view.
+
 ## [0.1.0-alpha.2] - 2026-11-27
 
 ### Changed
