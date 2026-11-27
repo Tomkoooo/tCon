@@ -9,6 +9,7 @@ import { hasBackend, tasksApi } from "./api";
 import type { BoardSettings, BoardState, Task, TaskPatch } from "./types";
 import type { FsChangedEvent } from "../types";
 import { onRefresh } from "../refresh";
+import { parseQuickInput } from "../quick/parse";
 
 export interface BoardEntry {
   state: BoardState | null;
@@ -37,6 +38,8 @@ interface TasksState {
   load(root: string): Promise<void>;
   ensure(root: string): void;
   create(root: string, title: string, description?: string, status?: string): Promise<Task | null>;
+  /** Create from typed text: `#label` and `!priority` tokens in the title are applied, not kept. */
+  capture(root: string, text: string, description?: string, status?: string): Promise<Task | null>;
   update(root: string, id: string, patch: TaskPatch): Promise<Task | null>;
   move(root: string, id: string, column: string, index: number): Promise<void>;
   remove(root: string, id: string): Promise<void>;
@@ -149,6 +152,15 @@ export const useTasks = create<TasksState>((set, get) => {
       } catch (e) {
         return fail(e);
       }
+    },
+
+    async capture(root, text, description = "", status = "inbox") {
+      const p = parseQuickInput(text);
+      if (!p.title) return null;
+      const desc = [p.description, description.trim()].filter(Boolean).join("\n\n");
+      const t = await get().create(root, p.title, desc, status);
+      if (!t || (!p.priority && !p.labels.length)) return t;
+      return get().update(root, t.id, { ...(p.priority ? { priority: p.priority } : {}), ...(p.labels.length ? { labels: p.labels } : {}) });
     },
 
     async update(root, id, patch) {

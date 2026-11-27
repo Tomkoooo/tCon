@@ -126,7 +126,7 @@ export function QuickCapture({ root, column = "inbox", autoFocusAt }: { root: st
     setDetails("");
     setShowDetails(false);
     titleRef.current?.focus();
-    const created = await useTasks.getState().create(root, t, details, target);
+    const created = await useTasks.getState().capture(root, t, details, target);
     if (created) {
       setFlash(`${created.id} added`);
       window.setTimeout(() => setFlash(null), 1400);
@@ -139,7 +139,7 @@ export function QuickCapture({ root, column = "inbox", autoFocusAt }: { root: st
         <input
           ref={titleRef}
           className="tk-capture-input"
-          placeholder="Add a task"
+          placeholder="Add a task  (#label !high)"
           value={title}
           spellCheck
           onChange={(e) => setTitle(e.target.value)}
