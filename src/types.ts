@@ -33,6 +33,10 @@ export interface Pane {
   lastActivity: number;
   exited?: boolean;
   exitCode?: number | null;
+  /** extra env for this pane only (e.g. a login flow for a specific account) */
+  env?: Record<string, string>;
+  /** not persisted across app restarts (e.g. login terminals) */
+  ephemeral?: boolean;
 }
 
 /** Split layout tree inside a terminal tab. */
@@ -96,6 +100,37 @@ export interface GitStatus {
   behind: number;
   dirty: boolean;
   files: GitFileStatus[];
+  upstream?: string | null;
+  hasRemote: boolean;
+  stashCount: number;
+}
+
+export type GitOp =
+  | { op: "stage"; files: string[] }
+  | { op: "stageAll" }
+  | { op: "unstage"; files: string[] }
+  | { op: "unstageAll" }
+  | { op: "discard"; tracked: string[]; untracked: string[] }
+  | { op: "commit"; message: string; amend: boolean }
+  | { op: "push" }
+  | { op: "pull" }
+  | { op: "fetch" }
+  | { op: "checkout"; branch: string }
+  | { op: "createBranch"; name: string }
+  | { op: "stash" }
+  | { op: "stashPop" };
+
+/** A Claude Code login = one CLAUDE_CONFIG_DIR (null = the default ~/.claude). */
+export interface Account { id: string; configDir: string | null }
+
+/** Subset of `claude auth status --json`. */
+export interface AuthStatus {
+  loggedIn: boolean;
+  authMethod?: string;
+  email?: string;
+  orgName?: string;
+  subscriptionType?: string;
+  planTier?: string;
 }
 export interface GitCommit { id: string; shortId: string; summary: string; author: string; time: number; parents: string[]; refs: string[] }
 export interface GitBranch { name: string; isRemote: boolean; isHead: boolean; upstream?: string | null; target: string }

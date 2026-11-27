@@ -5,6 +5,7 @@ import type {
 } from "../types";
 import { equal, insertPane, paneIds, removePane, sanitize, setSizes, uid } from "./layout";
 import { terminals } from "../terminal/registry";
+import { accountEnv, useAccounts } from "./accounts";
 
 export const PALETTE = ["#6aa7ff", "#5fc48a", "#e5b450", "#ef5f5f", "#b884f0", "#4fc6c6", "#f08a4b", "#e57ab8", "#9aa3ad"];
 export const INACTIVE_AFTER_MS = 30 * 60 * 1000;
@@ -30,6 +31,15 @@ export interface OpenEditorOpts {
   preview?: boolean;
   diff?: { file: string | null; staged: boolean } | null;
   groupId?: string;
+}
+
+export interface AddTerminalOpts {
+  claude: boolean;
+  split?: "row" | "column";
+  command?: string;
+  title?: string;
+  env?: Record<string, string>;
+  ephemeral?: boolean;
 }
 
 type ProjectPatch = Partial<Pick<Project, "name" | "color" | "profileId" | "accountLabel" | "sidebarOpen" | "sidebarTab" | "sidebarWidth">>;
@@ -58,7 +68,7 @@ interface WorkspaceState {
   moveProject(id: string, toIndex: number): void;
 
   // terminals
-  addTerminal(projectId: string, opts: { claude: boolean; split?: "row" | "column"; command?: string }): string;
+  addTerminal(projectId: string, opts: AddTerminalOpts): string;
   closePane(projectId: string, paneId: string): void;
   closeTerminalTab(projectId: string, tabId: string): void;
   setActiveTerminalTab(projectId: string, tabId: string): void;
@@ -67,7 +77,8 @@ interface WorkspaceState {
   focusPane(projectId: string, paneId: string): void;
   focusAdjacent(delta: number): void;
   cycleTab(delta: number): void;
-  restartPane(paneId: string): void;
+  /** Respawn a pane (kills it first if still running). */
+  restartPane(paneId: string, command?: string): void;
   resizeSplit(projectId: string, splitId: string, sizes: number[]): void;
 
   // editors
@@ -171,7 +182,7 @@ function basename(p: string) {
   return parts[parts.length - 1] || p;
 }
 
-function makePane(cwd: string, claude: boolean, profileId?: string | null, command?: string): Pane {
+function makePane(cwd: string, claude: boolean, profileId?: string | null, command?: string, extra?: Partial<Pane>): Pane {
   return {
     id: uid(),
     title: claude ? "Claude Code" : "shell",
@@ -180,7 +191,13 @@ function makePane(cwd: string, claude: boolean, profileId?: string | null, comma
     startupCommand: command ?? (claude ? CLAUDE_CMD : undefined),
     profileId: profileId ?? null,
     lastActivity: Date.now(),
+    ...extra,
   };
+}
+
+/** Env for a pane: global Claude account < project/pane profile < pane-specific overrides. */
+export function paneEnv(profiles: Profile[], project: Project, pane: Pane): Record<string, string> {
+  return { ...accountEnv(), ...profileEnv(profiles, pane.profileId ?? project.profileId), ...(pane.env ?? {}) };
 }
 
 const sameDiff = (a: EditorTab["diff"], b: EditorTab["diff"]) =>
@@ -209,8 +226,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     set((s) => (s.projects[id] ? { projects: { ...s.projects, [id]: fn(s.projects[id]) } } : s));
 
   const spawn = (project: Project, pane: Pane) => {
-    const env = profileEnv(get().profiles, pane.profileId ?? project.profileId);
-    terminals.ensure(pane, env);
+    terminals.ensure(pane, paneEnv(get().profiles, project, pane));
   };
 
   const dropStatuses = (ids: string[]) =>
@@ -358,11 +374,15 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
 
     // ---------------- terminals ----------------
 
-    addTerminal(projectId, { claude, split, command }) {
+    addTerminal(projectId, { claude, split, command, title, env, ephemeral }) {
       const project = get().projects[projectId];
       if (!project) return "";
       const focused = project.focusedPaneId ? project.panes[project.focusedPaneId] : undefined;
-      const pane = makePane(focused?.cwd ?? project.rootPath, claude, project.profileId, command);
+      const extra: Partial<Pane> = {};
+      if (title) extra.title = title;
+      if (env) extra.env = env;
+      if (ephemeral) extra.ephemeral = true;
+      const pane = makePane(focused?.cwd ?? project.rootPath, claude, project.profileId, command, extra);
       patchProject(projectId, (p) => {
         const activeIdx = p.terminalTabs.findIndex((t) => t.id === p.activeTerminalTabId);
         let tabs: TerminalTab[];
@@ -491,13 +511,14 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       }
     },
 
-    restartPane(paneId) {
+    restartPane(paneId, command) {
       const found = findPane(get(), paneId);
       if (!found) return;
       const [project, pane] = found;
       patchProject(project.id, (p) => ({ ...p, panes: { ...p.panes, [paneId]: { ...pane, exited: false, exitCode: null } } }));
       dropStatuses([paneId]);
-      terminals.respawn(pane, profileEnv(get().profiles, pane.profileId ?? project.profileId));
+      const run = command !== undefined ? { ...pane, startupCommand: command } : pane;
+      terminals.respawn(run, paneEnv(get().profiles, project, run));
     },
 
     resizeSplit(projectId, splitId, sizes) {
@@ -748,6 +769,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       const [project, pane] = found;
       patchProject(project.id, (p) => ({ ...p, panes: { ...p.panes, [paneId]: { ...pane, exited: true, exitCode: code } } }));
       set((s) => ({ statuses: { ...s.statuses, [paneId]: { state: "exited", seen: true, at: Date.now() } } }));
+      useAccounts.getState().onPaneExit(project.id, paneId, code);
     },
 
     setGitStatus(projectId, st) {
@@ -775,6 +797,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
 
     async restore() {
       await get().loadProfiles();
+      await useAccounts.getState().load(); // the active account's env applies to restored panes
       try {
         const theme = await api.settingGet("theme");
         if (theme === "dark" || theme === "light" || theme === "system") set({ theme });
@@ -877,7 +900,11 @@ useWorkspace.subscribe((s, prev) => {
       version: 2,
       order: st.order,
       activeProjectId: st.activeProjectId,
-      projects: st.order.map((id) => st.projects[id]),
+      projects: st.order.map((id) => {
+        const p = st.projects[id];
+        const panes = Object.fromEntries(Object.entries(p.panes).filter(([, pane]) => !pane.ephemeral));
+        return { ...p, panes }; // layouts referencing dropped panes are cleaned on restore
+      }),
     };
     api.settingSet("workspace", JSON.stringify(snap)).catch(() => {});
   }, 600);

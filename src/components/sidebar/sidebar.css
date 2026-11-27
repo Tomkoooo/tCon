@@ -286,3 +286,46 @@
   font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-dim);
 }
 .sb-row .file-icon { flex: none; margin-right: 2px; }
+
+/* ---------- Git actions ---------- */
+.sb-git-head { gap: 2px; height: 32px; padding: 0 6px; }
+.sb-branch-btn {
+  display: inline-flex; align-items: center; gap: 5px; min-width: 0; height: 24px; padding: 0 6px; border: none; border-radius: 5px;
+  background: none; color: var(--fg-dim); cursor: pointer; font: inherit;
+}
+.sb-branch-btn:hover:not(:disabled) { background: var(--bg-3); }
+.sb-sync-btn {
+  display: inline-flex; align-items: center; gap: 3px; height: 22px; padding: 0 6px; border: 1px solid transparent; border-radius: 5px;
+  background: none; color: var(--fg-dim); cursor: pointer; font: inherit; font-size: 11.5px;
+}
+.sb-sync-btn:hover:not(:disabled) { background: var(--bg-3); color: var(--fg); }
+.sb-sync-btn.sb-sync-hot { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+.sb-sync-btn:disabled, .sb-icon-btn:disabled, .sb-branch-btn:disabled { opacity: .45; cursor: default; }
+
+.sb-git-form { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px 0; }
+.sb-git-form:last-of-type { padding-bottom: 8px; }
+.sb-git-form input { width: 100%; }
+.sb-commit-msg { width: 100%; resize: none; font-size: 12.5px; line-height: 1.4; user-select: text; }
+.sb-commit-row { display: flex; }
+.sb-commit-btn {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 26px; border: none;
+  border-radius: 5px 0 0 5px; background: var(--accent); color: #fff; font: inherit; font-size: 12.5px; cursor: pointer;
+}
+.sb-commit-more {
+  width: 26px; height: 26px; border: none; border-left: 1px solid color-mix(in srgb, #fff 25%, transparent);
+  border-radius: 0 5px 5px 0; background: var(--accent); color: #fff; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+}
+.sb-commit-btn:hover:not(:disabled), .sb-commit-more:hover:not(:disabled) { filter: brightness(1.1); }
+.sb-commit-btn:disabled, .sb-commit-more:disabled { opacity: .5; cursor: default; }
+
+.sb-git-banner {
+  flex: none; display: flex; align-items: flex-start; gap: 6px; margin: 8px 10px 0; padding: 6px 8px; border-radius: 5px;
+  background: var(--bg-3); font-size: 12px; white-space: pre-wrap; word-break: break-word; max-height: 120px; overflow: auto; user-select: text;
+}
+.sb-git-banner > span { flex: 1; }
+.sb-git-banner-error { color: var(--danger); box-shadow: inset 3px 0 0 var(--danger); }
+
+.sb-row-actions { display: none; align-items: center; gap: 1px; flex: none; }
+.sb-change:hover .sb-row-actions { display: inline-flex; }
+.sb-row-actions .sb-icon-btn { width: 20px; height: 20px; }
+.sb-change { padding-right: 8px; }

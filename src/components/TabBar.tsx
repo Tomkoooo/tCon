@@ -4,6 +4,7 @@ import { INACTIVE_AFTER_MS, PALETTE, projectStatus, useWorkspace } from "../stor
 import type { Project } from "../types";
 import { StatusDot, statusLabel } from "./StatusDot";
 import { useContextMenu } from "./ContextMenu";
+import { AccountChip } from "./AccountChip";
 import { confirmProjectEditors } from "./editor/editorActions";
 
 function useNow(intervalMs: number) {
@@ -53,6 +54,7 @@ export function TabBar() {
         <div className="drag-region" data-tauri-drag-region style={{ flex: 1 }} />
       </div>
       <div className="tabbar-actions">
+        <AccountChip />
         <button className="icon-btn" title="Accounts / profiles (⌘,)" onClick={() => setModal({ kind: "profiles" })}>⚙</button>
       </div>
     </div>

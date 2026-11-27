@@ -22,6 +22,10 @@ pub struct GitStatus {
     pub behind: usize,
     pub dirty: bool,
     pub files: Vec<GitFileStatus>,
+    /// e.g. "origin/main"; None when the branch isn't tracking anything
+    pub upstream: Option<String>,
+    pub has_remote: bool,
+    pub stash_count: usize,
 }
 
 #[derive(Serialize, Default, Debug)]
@@ -79,6 +83,8 @@ fn worktree_code(s: Status) -> &'static str {
 pub(crate) fn status_sync(path: &str) -> Result<GitStatus, String> {
     let Some(repo) = open(path) else { return Ok(GitStatus::default()) };
     let mut st = GitStatus { is_repo: true, root: workdir_str(&repo), ..Default::default() };
+    st.has_remote = repo.remotes().map(|r| !r.is_empty()).unwrap_or(false);
+    st.stash_count = repo.reflog("refs/stash").map(|r| r.len()).unwrap_or(0);
 
     if let Ok(head) = repo.head() {
         if let Some(oid) = head.target() {
@@ -89,6 +95,7 @@ pub(crate) fn status_sync(path: &str) -> Result<GitStatus, String> {
             if let (Some(local), Some(name)) = (head.target(), head.name().ok()) {
                 if let Ok(up_name) = repo.branch_upstream_name(name) {
                     if let Ok(up_name) = up_name.as_str() {
+                        st.upstream = Some(up_name.trim_start_matches("refs/remotes/").to_string());
                         if let Ok(up_oid) = repo.refname_to_id(up_name) {
                             if let Ok((a, b)) = repo.graph_ahead_behind(local, up_oid) {
                                 st.ahead = a;

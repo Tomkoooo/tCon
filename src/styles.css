@@ -232,3 +232,16 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .statusbar .spacer { flex: 1; }
 .statusbar .sb-item { display: flex; gap: 5px; align-items: center; }
 .statusbar .attn { color: var(--warn); cursor: pointer; }
+
+/* ---------- Claude account chip (header) ---------- */
+.account-chip {
+  display: inline-flex; align-items: center; gap: 6px; height: 24px; max-width: 280px; padding: 0 8px; margin-right: 4px;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--bg); color: var(--fg); font-size: 11.5px; cursor: pointer;
+}
+.account-chip:hover { background: var(--bg-3); }
+.account-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none; }
+.account-chip.warn { border-color: color-mix(in srgb, var(--warn) 60%, var(--border)); }
+.account-chip.warn .account-dot { background: var(--warn); }
+.account-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.account-plan { flex: none; font-size: 10px; padding: 0 5px; border-radius: 6px; background: color-mix(in srgb, #d97757 28%, transparent); }
+.account-chip svg { flex: none; color: var(--fg-dim); }

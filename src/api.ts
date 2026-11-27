@@ -1,7 +1,7 @@
 // Typed wrappers around Tauri commands. All backend access goes through here.
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
-  FileContent, FsEntry, GitBranch, GitCommit, GitStatus, GitWorktree, Profile, RecentPath,
+  AuthStatus, FileContent, FsEntry, GitBranch, GitCommit, GitOp, GitStatus, GitWorktree, Profile, RecentPath,
 } from "./types";
 
 export interface SpawnOptions {
@@ -43,6 +43,12 @@ export const api = {
   gitBranches: (path: string) => invoke<GitBranch[]>("git_branches", { path }),
   gitWorktrees: (path: string) => invoke<GitWorktree[]>("git_worktrees", { path }),
   gitDiff: (path: string, file: string | null, staged: boolean) => invoke<string>("git_diff", { path, file, staged }),
+  gitOp: (path: string, op: GitOp) => invoke<string>("git_op", { path, op }),
+
+  // Claude accounts
+  claudeAuthStatus: (configDir: string | null) => invoke<AuthStatus>("claude_auth_status", { configDir }),
+  claudeAuthLogout: (configDir: string | null) => invoke<void>("claude_auth_logout", { configDir }),
+  accountPrepareDir: (dir: string) => invoke<void>("account_prepare_dir", { dir }),
 
   // FS
   fsListDir: (path: string, showHidden = false) => invoke<FsEntry[]>("fs_list_dir", { path, showHidden }),

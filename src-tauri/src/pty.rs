@@ -129,17 +129,25 @@ impl PtyManager {
                 }
             }
             let code = child2.lock().wait().ok().map(|s| s.exit_code());
+            let mut current = true;
             if let Some(state) = tauri::Manager::try_state::<PtyManager>(&app) {
                 let mut sessions = state.sessions.lock();
                 // Only remove if the map still holds *this* session (not a respawn).
-                if sessions.get(&pane_id).is_some_and(|s| Arc::ptr_eq(&s.child, &child2)) {
+                current = sessions.get(&pane_id).is_some_and(|s| Arc::ptr_eq(&s.child, &child2));
+                if current {
                     sessions.remove(&pane_id);
                 }
             }
-            let _ = app.emit("pane-exit", ExitEvent { pane_id: pane_id.clone(), code });
+            // A replaced (respawned) session exiting must not mark the pane as exited.
+            if current {
+                let _ = app.emit("pane-exit", ExitEvent { pane_id: pane_id.clone(), code });
+            }
         })?;
 
-        self.sessions.lock().insert(opts.pane_id, Session { writer, master: pair.master, child });
+        let old = self.sessions.lock().insert(opts.pane_id, Session { writer, master: pair.master, child });
+        if let Some(old) = old {
+            let _ = old.child.lock().kill(); // respawn of a still-running pane
+        }
         Ok(())
     }
 

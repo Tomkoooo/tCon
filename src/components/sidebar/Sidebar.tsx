@@ -38,7 +38,7 @@ export function Sidebar({ root, gitStatus, tab, onOpenFile, onOpenDiff }: Sideba
         )}
         {(mounted.git || tab === "git") && (
           <div className="sb-pane" hidden={tab !== "git"}>
-            <GitPanel root={root} gitStatus={gitStatus} onOpenDiff={onOpenDiff} />
+            <GitPanel root={root} gitStatus={gitStatus} onOpenDiff={onOpenDiff} onOpenFile={(p) => onOpenFile(p, false)} />
           </div>
         )}
       </div>

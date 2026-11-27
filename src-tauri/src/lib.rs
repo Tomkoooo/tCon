@@ -1,3 +1,4 @@
+mod cli;
 mod db;
 mod fs;
 mod git;
@@ -154,6 +155,10 @@ pub fn run() {
             git::git_branches,
             git::git_worktrees,
             git::git_diff,
+            cli::git_op,
+            cli::claude_auth_status,
+            cli::claude_auth_logout,
+            cli::account_prepare_dir,
             fs::fs_list_dir,
             fs::fs_read_text,
             fs::fs_write_text,

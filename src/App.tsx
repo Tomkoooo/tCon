@@ -2,9 +2,9 @@ import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
-import { api } from "./api";
 import { findPane, isPaneVisible, useWorkspace } from "./store/workspace";
 import { closeEditors } from "./components/editor/editorActions";
+import { scheduleGitRefresh } from "./store/gitRefresh";
 import { terminals } from "./terminal/registry";
 import type { FsChangedEvent, ProgramStatus } from "./types";
 import { TabBar } from "./components/TabBar";
@@ -57,23 +57,6 @@ async function notify(paneId: string, status: ProgramStatus) {
 }
 
 // ---------- git status ----------
-const gitTimers = new Map<string, number>();
-function scheduleGitRefresh(projectId: string, delay = 400) {
-  window.clearTimeout(gitTimers.get(projectId));
-  gitTimers.set(
-    projectId,
-    window.setTimeout(async () => {
-      const p = useWorkspace.getState().projects[projectId];
-      if (!p) return;
-      try {
-        useWorkspace.getState().setGitStatus(projectId, await api.gitStatus(p.rootPath));
-      } catch {
-        useWorkspace.getState().setGitStatus(projectId, null);
-      }
-    }, delay),
-  );
-}
-
 function useGitPolling() {
   const order = useWorkspace((s) => s.order);
   const active = useWorkspace((s) => s.activeProjectId);
