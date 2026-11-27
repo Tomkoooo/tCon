@@ -7,6 +7,8 @@ Each release's section becomes its GitHub release notes.
 
 ## [Unreleased]
 
+## [0.2.0-alpha.1] - 2026-11-27
+
 ### Added
 - **Go to File** (⌘P): fuzzy-find any file in the project by name and open it. It respects `.gitignore` and skips `node_modules` and build folders.
 - **Find in Files** (⇧⌘F): search the project's text, with match case, whole word and regex toggles. Picking a result opens the file at that line.
@@ -70,6 +72,7 @@ The first public alpha. macOS (Apple Silicon and Intel) and Linux.
 - **Auto-update:** tCon checks GitHub for signed updates on launch and every 6 hours, shows a notice with the release notes, and installs and restarts when you choose. "Check for Updates…" is in the app menu and in Settings → Updates.
 - **Releases and CI:** signed updater bundles, typecheck, build, tests, clippy, `npm audit` and `cargo audit` on every push.
 
-[Unreleased]: https://github.com/Tomkoooo/tCon/compare/v0.1.0-alpha.2...HEAD
+[Unreleased]: https://github.com/Tomkoooo/tCon/compare/v0.2.0-alpha.1...HEAD
+[0.2.0-alpha.1]: https://github.com/Tomkoooo/tCon/compare/v0.1.0-alpha.2...v0.2.0-alpha.1
 [0.1.0-alpha.2]: https://github.com/Tomkoooo/tCon/compare/v0.1.0-alpha.1...v0.1.0-alpha.2
 [0.1.0-alpha.1]: https://github.com/Tomkoooo/tCon/releases/tag/v0.1.0-alpha.1
