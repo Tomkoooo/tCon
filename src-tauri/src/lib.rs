@@ -1,4 +1,5 @@
 mod appicon;
+mod browser;
 mod cli;
 mod db;
 mod fs;
@@ -140,13 +141,15 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .manage(PtyManager::default())
         .manage(fs::Watchers::default())
+        .manage(browser::ChromeState::default())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             app.manage(Db::open(&dir)?);
             app.set_menu(build_menu(app.handle())?)?;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
+        // browser::guard_invoke: pages in the integrated browser (`browser-*` webviews) never reach commands.
+        .invoke_handler(browser::guard_invoke(tauri::generate_handler![
             appicon::app_set_icon,
             appicon::app_icon_preview,
             pty_spawn,
@@ -197,7 +200,24 @@ pub fn run() {
             tasks::task_delete,
             tasks::tasks_save_settings,
             tasks::tasks_install_skill,
-        ])
+            browser::builtin::browser_info,
+            browser::builtin::browser_create,
+            browser::builtin::browser_set_bounds,
+            browser::builtin::browser_navigate,
+            browser::builtin::browser_action,
+            browser::builtin::browser_url,
+            browser::builtin::browser_close,
+            browser::builtin::browser_clear_data,
+            browser::chrome::chrome_status,
+            browser::chrome::chrome_launch,
+            browser::chrome::chrome_tabs,
+            browser::chrome::chrome_open,
+            browser::chrome::chrome_activate,
+            browser::chrome::chrome_close,
+            browser::chrome::chrome_link_native_hosts,
+            browser::import::browser_import_sources,
+            browser::import::browser_import,
+        ]))
         .build(context)
         .expect("error while building tauri application")
         .run(|app, event| {

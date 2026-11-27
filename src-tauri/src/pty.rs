@@ -35,6 +35,14 @@ struct CwdEvent {
     cwd: String,
 }
 
+/// A local dev-server URL printed by the pane (for the Browser view).
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct DevServerEvent {
+    pane_id: String,
+    url: String,
+}
+
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct ExitEvent {
@@ -104,6 +112,7 @@ impl PtyManager {
         let child2 = child.clone();
         std::thread::Builder::new().name(format!("pty-{pane_id}")).spawn(move || {
             let mut filter = OscFilter::new();
+            let mut dev_urls = crate::browser::devurl::DevUrlScanner::default();
             let mut buf = vec![0u8; 64 * 1024];
             let mut events = Vec::new();
             loop {
@@ -126,6 +135,9 @@ impl PtyManager {
                                     let _ = app.emit("pane-cwd", CwdEvent { pane_id: pane_id.clone(), cwd });
                                 }
                             }
+                        }
+                        for url in dev_urls.feed(&out) {
+                            let _ = app.emit_to("main", "dev-server", DevServerEvent { pane_id: pane_id.clone(), url });
                         }
                         if !out.is_empty() && on_data.send(InvokeResponseBody::Raw(out)).is_err() {
                             break;

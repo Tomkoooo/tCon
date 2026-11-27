@@ -5,6 +5,7 @@ import { MODEL_SETTING, modelLabel, normalizeModel } from "../claudeModel";
 import { Modal } from "./Modal";
 import { ModelPicker } from "./ProfilesModal";
 import { ColorPicker, Field, Segmented } from "./ui";
+import { normalizeUrl } from "../browser/api";
 import { Icon } from "./icons";
 
 export function envToText(env: Record<string, string> | null | undefined) {
@@ -35,6 +36,7 @@ export function ProjectSettingsModal({ projectId }: { projectId: string }) {
   const [modelMode, setModelMode] = useState<"inherit" | "override">(project?.claudeModel ? "override" : "inherit");
   const [model, setModel] = useState(project?.claudeModel ? normalizeModel(project.claudeModel) : globalModel);
   const [envText, setEnvText] = useState(envToText(project?.env));
+  const [devUrl, setDevUrl] = useState(project?.browserUrl ?? "");
   const [profileId, setProfileId] = useState(project?.profileId ?? null);
   const [error, setError] = useState("");
   if (!project) return null;
@@ -45,6 +47,8 @@ export function ProjectSettingsModal({ projectId }: { projectId: string }) {
     if (Object.keys(env).some((k) => SECRET_RE.test(k))) {
       return setError("API keys and tokens would be stored unencrypted here. Sign in under Settings → Accounts instead.");
     }
+    const browserUrl = devUrl.trim() ? normalizeUrl(devUrl) : null;
+    if (devUrl.trim() && !browserUrl) return setError(`“${devUrl.trim()}” isn't a web address.`);
     update(projectId, {
       name: name.trim() || project.name,
       accountLabel: label.trim() || null,
@@ -52,6 +56,7 @@ export function ProjectSettingsModal({ projectId }: { projectId: string }) {
       profileId,
       claudeModel: modelMode === "override" ? model : null,
       env: Object.keys(env).length ? env : null,
+      browserUrl,
     });
     setModal(null);
   };
@@ -86,6 +91,10 @@ export function ProjectSettingsModal({ projectId }: { projectId: string }) {
             />
             {modelMode === "override" && <ModelPicker value={model} onChange={setModel} />}
           </div>
+        </Field>
+
+        <Field label="Dev server URL" hint="Opened by Browser: Open Dev Server. Empty = the latest local URL a terminal printed.">
+          <input placeholder="http://localhost:5173" spellCheck={false} value={devUrl} onChange={(e) => setDevUrl(e.target.value)} />
         </Field>
 
         <details className="advanced" open={!!project.env || !!profile}>
