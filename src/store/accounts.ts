@@ -20,6 +20,8 @@ interface AccountsState {
   logins: Record<string, string>;
   /** accounts added in this session that should become active once logged in */
   pendingActivate: string | null;
+  /** the one-time "add your other accounts" tip was dismissed (persisted) */
+  nudgeDismissed: boolean;
 
   load(): Promise<void>;
   refresh(id?: string): Promise<void>;
@@ -30,6 +32,7 @@ interface AccountsState {
   login(id: string, relogin?: boolean): boolean;
   logout(id: string): Promise<void>;
   onPaneExit(projectId: string, paneId: string, code: number | null): void;
+  dismissNudge(): void;
 }
 
 const shq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
@@ -73,6 +76,7 @@ export const useAccounts = create<AccountsState>((set, get) => ({
   refreshing: false,
   logins: {},
   pendingActivate: null,
+  nudgeDismissed: true, // until loaded: never flash the tip
 
   async load() {
     try {
@@ -80,7 +84,8 @@ export const useAccounts = create<AccountsState>((set, get) => ({
       const extra = raw ? (JSON.parse(raw) as Account[]).filter((a) => a.id && a.configDir) : [];
       const accounts = [DEFAULT_ACCOUNT, ...extra];
       const active = await api.settingGet("claudeActiveAccount");
-      set({ accounts, activeId: accounts.some((a) => a.id === active) ? active! : DEFAULT_ACCOUNT.id });
+      const dismissed = (await api.settingGet("accountsNudgeDismissed")) === "1";
+      set({ accounts, activeId: accounts.some((a) => a.id === active) ? active! : DEFAULT_ACCOUNT.id, nudgeDismissed: dismissed || accounts.length > 1 });
     } catch {
       /* backend not ready */
     }
@@ -122,6 +127,7 @@ export const useAccounts = create<AccountsState>((set, get) => ({
     await api.accountPrepareDir(dir);
     const accounts = [...get().accounts, { id, configDir: dir }];
     set({ accounts, pendingActivate: id });
+    get().dismissNudge();
     persist(accounts, get().activeId);
     if (!get().login(id)) {
       await message("Open a project first — the login runs in one of its terminals.", { title: "Add account", kind: "info" });
@@ -164,6 +170,11 @@ export const useAccounts = create<AccountsState>((set, get) => ({
     }
   },
 
+  dismissNudge() {
+    if (!get().nudgeDismissed) set({ nudgeDismissed: true });
+    api.settingSet("accountsNudgeDismissed", "1").catch(() => {});
+  },
+
   onPaneExit(projectId, paneId, code) {
     const accountId = get().logins[paneId];
     if (!accountId) return;
@@ -197,7 +208,7 @@ async function offerRestart(accountId: string) {
     for (const pane of Object.values(p.panes)) {
       if (pane.ephemeral || pane.exited || !pane.isClaude || !pane.startupCommand?.trim().startsWith("claude")) continue;
       // A project/pane profile with its own CLAUDE_CONFIG_DIR isn't affected by the global account.
-      if (profileEnv(ws.profiles, pane.profileId ?? p.profileId).CLAUDE_CONFIG_DIR) continue;
+      if (profileEnv(ws.profiles, pane.profileId ?? p.profileId).CLAUDE_CONFIG_DIR || p.env?.CLAUDE_CONFIG_DIR) continue;
       const state = ws.statuses[pane.id]?.state;
       if (state === "working" || state === "blocked") busy++;
       else candidates.push({ paneId: pane.id, cwd: pane.cwd });

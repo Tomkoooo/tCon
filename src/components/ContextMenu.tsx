@@ -1,19 +1,55 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 export type MenuItem =
   | "sep"
-  | { label: string; hint?: string; action(): void }
+  | {
+      label: string;
+      hint?: string;
+      action(): void;
+      /** shows a check mark column for every item in the menu */
+      checked?: boolean;
+      disabled?: boolean;
+      danger?: boolean;
+      title?: string;
+    }
+  | { header: string }
   | { custom: React.ReactNode };
 
-export function useContextMenu() {
-  const [state, setState] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
+export interface MenuOpenOpts {
+  /** position under the event's currentTarget instead of at the pointer */
+  anchor?: "below-start" | "below-end";
+  minWidth?: number;
+}
 
-  const open = useCallback((e: React.MouseEvent, items: MenuItem[]) => {
+export function useContextMenu() {
+  const [state, setState] = useState<{ x: number; y: number; items: MenuItem[]; minWidth?: number; alignEnd?: boolean } | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const open = useCallback((e: React.MouseEvent, items: MenuItem[], opts?: MenuOpenOpts) => {
     e.preventDefault();
     e.stopPropagation();
-    setState({ x: Math.min(e.clientX, window.innerWidth - 220), y: Math.min(e.clientY, window.innerHeight - 40 - items.length * 26), items });
+    if (opts?.anchor) {
+      const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const end = opts.anchor === "below-end";
+      setState({ x: end ? r.right : r.left, y: r.bottom + 4, items, minWidth: opts.minWidth, alignEnd: end });
+    } else {
+      setState({ x: e.clientX, y: e.clientY, items, minWidth: opts?.minWidth });
+    }
   }, []);
   const close = useCallback(() => setState(null), []);
+
+  // keep the menu inside the window once its real size is known
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!state || !el) return;
+    const r = el.getBoundingClientRect();
+    let left = state.alignEnd ? state.x - r.width : state.x;
+    left = Math.max(4, Math.min(left, window.innerWidth - r.width - 4));
+    const top = Math.max(4, Math.min(state.y, window.innerHeight - r.height - 4));
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+    el.style.visibility = "visible";
+  }, [state]);
 
   useEffect(() => {
     if (!state) return;
@@ -31,23 +67,37 @@ export function useContextMenu() {
     };
   }, [state, close]);
 
+  const checks = state?.items.some((i) => typeof i === "object" && "label" in i && i.checked !== undefined);
+
   const element = state ? (
-    <div className="ctx-menu" style={{ left: state.x, top: Math.max(4, state.y) }}>
+    <div
+      ref={ref}
+      className={`ctx-menu${checks ? " has-checks" : ""}`}
+      role="menu"
+      style={{ left: state.x, top: state.y, minWidth: state.minWidth, visibility: "hidden" }}
+    >
       {state.items.map((item, i) =>
         item === "sep" ? (
           <div key={i} className="ctx-sep" />
         ) : "custom" in item ? (
           <div key={i}>{item.custom}</div>
+        ) : "header" in item ? (
+          <div key={i} className="ctx-header">{item.header}</div>
         ) : (
           <div
             key={i}
-            className="ctx-item"
+            role="menuitem"
+            aria-disabled={item.disabled}
+            title={item.title}
+            className={`ctx-item${item.disabled ? " disabled" : ""}${item.danger ? " danger" : ""}`}
             onClick={() => {
+              if (item.disabled) return;
               close();
               item.action();
             }}
           >
-            <span>{item.label}</span>
+            {checks && <span className="ctx-check">{item.checked ? "✓" : ""}</span>}
+            <span className="ctx-label">{item.label}</span>
             {item.hint && <span className="kbd-hint">{item.hint}</span>}
           </div>
         ),

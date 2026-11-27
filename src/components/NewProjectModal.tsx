@@ -2,8 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { api } from "../api";
 import { PALETTE, useWorkspace } from "../store/workspace";
+import { accountLabel, planLabel, useAccounts } from "../store/accounts";
+import { useTheming } from "../theming/store";
+import { MODEL_SETTING, modelLabel, normalizeModel } from "../claudeModel";
 import type { RecentPath } from "../types";
 import { Modal } from "./Modal";
+import { ColorPicker, Field, Toggle } from "./ui";
 
 function relTime(ms: number) {
   const d = Date.now() - ms;
@@ -18,7 +22,6 @@ const base = (p: string) => p.replace(/\/+$/, "").split("/").pop() || p;
 export function NewProjectModal() {
   const setModal = useWorkspace((s) => s.setModal);
   const openProject = useWorkspace((s) => s.openProject);
-  const profiles = useWorkspace((s) => s.profiles);
   const projects = useWorkspace((s) => s.projects);
 
   const [recent, setRecent] = useState<RecentPath[]>([]);
@@ -27,7 +30,6 @@ export function NewProjectModal() {
   const [name, setName] = useState("");
   const [color, setColor] = useState<string | undefined>();
   const [claude, setClaude] = useState(true);
-  const [profileId, setProfileId] = useState<string>("");
   const [newFolder, setNewFolder] = useState<{ parent: string; name: string; git: boolean } | null>(null);
   const [error, setError] = useState("");
   const [cursor, setCursor] = useState(0);
@@ -35,7 +37,6 @@ export function NewProjectModal() {
   const reload = () => api.recentList(30).then(setRecent).catch(() => setRecent([]));
   useEffect(() => {
     void reload();
-    api.settingGet("lastProfileId").then((v) => v && setProfileId(v)).catch(() => {});
   }, []);
 
   const shown = useMemo(() => {
@@ -56,8 +57,7 @@ export function NewProjectModal() {
         await api.fsCreateProjectDir(target, newFolder.git);
       }
       if (!target) return setError("Pick a folder.");
-      await api.settingSet("lastProfileId", profileId).catch(() => {});
-      openProject({ path: target, name: name.trim() || undefined, color, profileId: profileId || null, claude });
+      openProject({ path: target, name: name.trim() || undefined, color, profileId: null, claude });
       close();
     } catch (e) {
       setError(String(e));
@@ -91,7 +91,7 @@ export function NewProjectModal() {
   };
 
   return (
-    <Modal title="Open project" onClose={close}>
+    <Modal title="Open Project" onClose={close}>
       <div className="modal-body" onKeyDown={onKey}>
         {!newFolder ? (
           <>
@@ -120,7 +120,7 @@ export function NewProjectModal() {
                   }}
                   onDoubleClick={() => {
                     setPath(r.path);
-                    openProject({ path: r.path, color, profileId: profileId || null, claude });
+                    openProject({ path: r.path, color, profileId: null, claude });
                     close();
                   }}
                 >
@@ -135,7 +135,7 @@ export function NewProjectModal() {
                     {r.pinned ? "★" : "☆"}
                   </button>
                   <span className="recent-name">{base(r.path)}</span>
-                  <span className="recent-path" title={r.path}>{r.path}</span>
+                  <span className="recent-path" title={r.path}>{"\u200e" + r.path}</span>
                   <span className="recent-time">{relTime(r.lastUsed)}</span>
                   <button
                     className="star"
@@ -170,52 +170,55 @@ export function NewProjectModal() {
               <label>Folder name</label>
               <input autoFocus value={newFolder.name} onChange={(e) => setNewFolder({ ...newFolder, name: e.target.value })} />
             </div>
-            <label className="check">
-              <input type="checkbox" checked={newFolder.git} onChange={(e) => setNewFolder({ ...newFolder, git: e.target.checked })} />
-              Initialize git repository
-            </label>
-            <button className="btn" style={{ alignSelf: "flex-start" }} onClick={() => setNewFolder(null)}>← Back to recent</button>
+            <Toggle checked={newFolder.git} onChange={(v) => setNewFolder({ ...newFolder, git: v })} label="Initialize a git repository" />
+            <button className="btn ghost" style={{ alignSelf: "flex-start" }} onClick={() => setNewFolder(null)}>← Back to recent</button>
           </>
         )}
 
-        <div className="row" style={{ alignItems: "flex-end" }}>
-          <div className="field" style={{ flex: 1 }}>
-            <label>Tab name</label>
+        <div className="row top">
+          <Field label="Tab name" grow>
             <input placeholder={path ? base(path) : "defaults to folder name"} value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div className="field" style={{ flex: 1 }}>
-            <label>Account / profile</label>
-            <select value={profileId} onChange={(e) => setProfileId(e.target.value)}>
-              <option value="">Default</option>
-              {profiles.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </div>
+          </Field>
+          <Field label="Color" grow>
+            <ColorPicker value={color} onChange={setColor} palette={PALETTE} />
+          </Field>
         </div>
-        <div className="field">
-          <span className="field-label">Color</span>
-          <div className="swatches">
-            {PALETTE.map((c) => (
-              <button key={c} className={`swatch${c === color ? " selected" : ""}`} style={{ background: c }} onClick={() => setColor(c)} />
-            ))}
-            <input type="color" value={color ?? "#6aa7ff"} onChange={(e) => setColor(e.target.value)} style={{ width: 28, height: 22, padding: 0 }} />
-          </div>
+        <div className="launch-row">
+          <Toggle checked={claude} onChange={setClaude} label={<>Start a Claude Code session</>} />
+          {claude && <LaunchSummary />}
         </div>
-        <label className="check">
-          <input type="checkbox" checked={claude} onChange={(e) => setClaude(e.target.checked)} />
-          Start a Claude Code session (runs <code>claude</code> in the new terminal)
-        </label>
-        {error && <div style={{ color: "var(--danger)" }}>{error}</div>}
+        {error && <div className="settings-error">{error}</div>}
       </div>
       <div className="modal-foot">
         <span className="hint">↑↓ to pick · Enter to open</span>
         <span className="spacer" />
-        <button className="btn" onClick={close}>Cancel</button>
+        <button className="btn ghost" onClick={close}>Cancel</button>
         <button className="btn primary" onClick={submit} disabled={!path && !newFolder}>
           Open
         </button>
       </div>
     </Modal>
+  );
+}
+
+/** "as you@x.com (Max) · model Opus" with a link to change either. */
+function LaunchSummary() {
+  const account = useAccounts((s) => s.accounts.find((a) => a.id === s.activeId) ?? s.accounts[0]);
+  const st = useAccounts((s) => s.status[account.id]);
+  const model = useTheming((s) => normalizeModel(s.settings[MODEL_SETTING]));
+  const plan = planLabel(st);
+  const go = (section: string) => useWorkspace.getState().setModal({ kind: "profiles", section });
+  return (
+    <span className="hint launch-summary">
+      as{" "}
+      <button className="link-btn" title="Change account" onClick={() => go("accounts")}>
+        {st?.loggedIn ? accountLabel(account, st) : "not logged in"}
+        {plan ? ` (${plan})` : ""}
+      </button>
+      {" · model "}
+      <button className="link-btn" title="Change the default model" onClick={() => go("claude")}>
+        {modelLabel(model)}
+      </button>
+    </span>
   );
 }

@@ -59,6 +59,7 @@ export const COMMANDS: Command[] = [
   { id: "tcon.newProject", title: "Open Project…", run: () => ws().setModal({ kind: "newProject" }) },
   { id: "tcon.refresh", title: "Refresh Files and Git Status", run: () => refreshWorkspace(proj()?.rootPath) },
   { id: "tcon.openSettings", title: "Settings", run: () => ws().setModal({ kind: "profiles" }) },
+  { id: "tcon.manageAccounts", title: "Manage Claude Accounts…", run: () => ws().setModal({ kind: "profiles", section: "accounts" }) },
   { id: "tcon.openSettingsJson", title: "Open Settings (JSON)", run: () => void openConfigFile("settings.json") },
   { id: "tcon.openKeybindingsJson", title: "Open Keyboard Shortcuts (JSON)", run: () => void openConfigFile("keybindings.json") },
   { id: "tcon.jumpToAttention", title: "Jump to Session Needing Attention", run: jumpToAttention },
