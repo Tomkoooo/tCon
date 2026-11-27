@@ -2,7 +2,7 @@
 // plan, progress log and verification, and run the agent actions.
 import { useEffect, useRef, useState } from "react";
 import { useTasks } from "../../tasks/store";
-import { livePane, openAgentTerminal, projectForRoot, startAgent, stopAgent } from "../../tasks/agent";
+import { livePane, openAgentTerminal, planTasks, projectForRoot, startAgent, stopAgent } from "../../tasks/agent";
 import { PRIORITIES, type BoardState, type Task } from "../../tasks/types";
 import { useWorkspace } from "../../store/workspace";
 import { confirmDelete } from "./TasksView";
@@ -132,7 +132,7 @@ export function TaskDrawer({ root, task, state, onClose }: { root: string; task:
 
   const sections = splitSections(task.sections);
   const project = projectForRoot(root);
-  const running = (task.agent === "running" || task.agent === "blocked") && alive;
+  const running = (task.agent === "running" || task.agent === "blocked" || task.agent === "planning") && alive;
   const queued = task.agent === "queued";
 
   return (
@@ -259,6 +259,12 @@ export function TaskDrawer({ root, task, state, onClose }: { root: string; task:
               <button className="btn small" disabled={!project} title={project ? undefined : "Open this folder as a project first"} onClick={() => void startAgent(root, task.id)}>
                 <ClaudeMark size={12} />
                 {task.agent === "done" || task.agent === "failed" ? "Run Claude again" : "Start Claude"}
+              </button>
+            )}
+            {!running && !queued && task.status !== "done" && (
+              <button className="btn small" disabled={!project} title="Write a plan and move the task to Todo, without changing code" onClick={() => void planTasks(root, [task.id])}>
+                <Icon name="notes" size={14} />
+                Plan with Claude
               </button>
             )}
             <button className="btn small" disabled={!alive} title={alive ? undefined : "No agent terminal is open"} onClick={() => openAgentTerminal(root, task.id)}>

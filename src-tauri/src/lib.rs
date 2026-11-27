@@ -236,6 +236,7 @@ pub fn run() {
             tasks::task_delete,
             tasks::tasks_save_settings,
             tasks::tasks_install_skill,
+            tasks::tasks_refresh_skill,
             background::background_apply,
             background::background_status,
             background::background_check_shortcut,

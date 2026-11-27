@@ -15,4 +15,5 @@ export const tasksApi = {
   remove: (root: string, id: string) => invoke<void>("task_delete", { root, id }),
   saveSettings: (root: string, settings: BoardSettings) => invoke<Board>("tasks_save_settings", { root, settings }),
   installSkill: (configDirs: string[]) => invoke<string[]>("tasks_install_skill", { configDirs }),
+  refreshSkill: (configDirs: string[]) => invoke<string[]>("tasks_refresh_skill", { configDirs }),
 };

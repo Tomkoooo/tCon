@@ -1,6 +1,7 @@
 // Task board types. Mirror src-tauri/src/tasks.rs (camelCase serde).
 
-export type AgentState = "idle" | "queued" | "running" | "blocked" | "done" | "failed";
+export type AgentState = "idle" | "queued" | "planning" | "running" | "blocked" | "done" | "failed";
+export type AgentMode = "work" | "plan";
 export type Priority = "none" | "low" | "medium" | "high" | "urgent";
 
 export interface Task {

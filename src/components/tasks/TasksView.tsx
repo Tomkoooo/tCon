@@ -2,7 +2,7 @@
 // with drag & drop. Built for jotting things down fast during a meeting.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useBoard, useTasks } from "../../tasks/store";
-import { installSkill, openAgentTerminal, projectForRoot, startAgent, stopAgent, livePane } from "../../tasks/agent";
+import { installSkill, openAgentTerminal, planTasks, projectForRoot, startAgent, stopAgent, livePane } from "../../tasks/agent";
 import { openBoard, quickAddTask } from "../../tasks/actions";
 import { PRIORITIES, type BoardState, type Task } from "../../tasks/types";
 import { useContextMenu, type MenuItem } from "../ContextMenu";
@@ -59,12 +59,13 @@ export function boardMenuItems(root: string, state: BoardState | null, opts: { i
 export function taskMenuItems(root: string, task: Task, state: BoardState | null, extra: { open?: () => void } = {}): MenuItem[] {
   const st = useTasks.getState();
   const alive = !!livePane(task);
-  const running = task.agent === "running" || task.agent === "blocked" || task.agent === "queued";
+  const running = task.agent === "running" || task.agent === "blocked" || task.agent === "queued" || task.agent === "planning";
   const items: MenuItem[] = [];
   if (extra.open) items.push({ label: "Open", hint: "↵", action: extra.open });
   items.push(running && (alive || task.agent === "queued")
-    ? { label: task.agent === "queued" ? "Remove from Agent Queue" : "Stop Agent", action: () => void stopAgent(root, task.id) }
+    ? { label: task.agent === "queued" ? "Remove from Agent Queue" : task.agent === "planning" ? "Stop Planner" : "Stop Agent", action: () => void stopAgent(root, task.id) }
     : { label: "Let Claude Work on This", action: () => void startAgent(root, task.id) });
+  if (!running && task.status !== "done") items.push({ label: "Plan with Claude", title: "Write a plan and move it to Todo, without changing code", action: () => void planTasks(root, [task.id]) });
   if (alive) items.push({ label: "Open Agent Terminal", action: () => openAgentTerminal(root, task.id) });
   items.push("sep");
   for (const c of state?.board.columns ?? []) {
@@ -310,7 +311,7 @@ function TaskRow(props: {
   const { root, task, column, index } = props;
   const view = useAgentView(task);
   const [dragging, setDragging] = useState(false);
-  const active = view.kind === "working" || view.kind === "blocked" || view.kind === "queued" || view.kind === "waiting";
+  const active = view.kind === "working" || view.kind === "blocked" || view.kind === "queued" || view.kind === "waiting" || view.kind === "planning";
   return (
     <div
       className={`tk-row${props.dropBefore ? " tk-drop-before" : ""}${props.dropAfter ? " tk-drop-after" : ""}${dragging ? " tk-dragging" : ""}${task.status === "done" ? " tk-row-done" : ""}`}

@@ -10,7 +10,7 @@ import { terminals } from "../terminal/registry";
 import type { PaneStatus, Project } from "../types";
 import { hasBackend, tasksApi } from "./api";
 import { onBoardLoaded, taskById, useTasks } from "./store";
-import type { BoardState, Task } from "./types";
+import type { AgentMode, BoardState, Task } from "./types";
 
 const trim = (p: string) => (p.length > 1 ? p.replace(/\/+$/, "") : p);
 const shq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
@@ -28,7 +28,7 @@ export function livePane(task: Task): string | null {
   return found && !found[1].exited ? task.paneId : null;
 }
 
-export type AgentViewKind = "none" | "queued" | "working" | "waiting" | "blocked" | "done" | "failed" | "detached";
+export type AgentViewKind = "none" | "queued" | "planning" | "working" | "waiting" | "blocked" | "done" | "failed" | "detached";
 export interface AgentView { kind: AgentViewKind; label: string; title: string }
 
 /** What to show for a task's agent: the file's `agent:` state refined by the live pane status. */
@@ -38,6 +38,10 @@ export function agentView(task: Task, pane: PaneStatus | undefined, alive: boole
   if (a === "blocked") return { kind: "blocked", label: "Blocked", title: "The agent is blocked and asked a question (see the progress log)" };
   if (a === "failed" || (alive && pane?.state === "error" && a === "running")) return { kind: "failed", label: "Failed", title: "The agent failed — see the progress log" };
   if (a === "queued") return { kind: "queued", label: "Queued", title: "Waiting for a free agent slot" };
+  if (a === "planning") {
+    if (task.paneId && !alive) return { kind: "detached", label: "Planner ended", title: "The planning agent's terminal is gone" };
+    return { kind: "planning", label: "Planning", title: "Claude is planning this task (no code changes)" };
+  }
   if (a === "done") return { kind: "done", label: "Agent done", title: "Claude finished this task" };
   if (a === "running") {
     if (!task.paneId) return { kind: "working", label: "Working", title: "A Claude session outside tCon is working on this" };
@@ -48,7 +52,8 @@ export function agentView(task: Task, pane: PaneStatus | undefined, alive: boole
   return { kind: "none", label: "", title: "" };
 }
 
-export function buildPrompt(task: Task, root: string): string {
+export function buildPrompt(task: Task, root: string, mode: AgentMode = "work"): string {
+  if (mode === "plan") return buildPlanPrompt([task], root);
   const id = task.id;
   return oneLine(`
     Work on tCon task ${id} ("${oneLine(task.title)}"). The task file is .tcon/tasks/${id}.md in ${root}.
@@ -59,6 +64,23 @@ export function buildPrompt(task: Task, root: string): string {
     Keep the task file's frontmatter (status, agent, updated, branch, commits) and its ## Progress log
     updated at every stage, and finish with status: review and agent: done.
     If you need a decision from me, set agent: blocked, log the question, and ask me here.
+  `);
+}
+
+/** Triage prompt for one or more tasks: plan only, no code changes, no commits. */
+export function buildPlanPrompt(tasks: Task[], root: string): string {
+  const list = tasks.map((t) => `${t.id} ("${oneLine(t.title)}")`).join(", ");
+  const files = tasks.map((t) => `.tcon/tasks/${t.id}.md`).join(", ");
+  return oneLine(`
+    Triage and plan these tCon tasks in ${root}: ${list}. Task files: ${files}.
+    Follow the "Triage (plan only)" section of the tCon task protocol in .tcon/PROTOCOL.md.
+    Do not change any code and do not commit. For each task: read it and inspect the relevant code,
+    write a concrete ## Plan (numbered steps, files to touch, how to verify) ending with a
+    "Files: …" line, a "Parallel-safe: yes|no — reason" line and, if it needs other tasks first,
+    a "Depends: T-x" line (and depends: [T-x] in the frontmatter). Set priority and labels if empty,
+    then set status: todo and agent: idle and log "Triaged — plan written".
+    If a task is too unclear to plan, leave it in inbox with agent: idle and log the question.
+    Finish with a short summary of the plans and any dependencies between the tasks.
   `);
 }
 
@@ -82,7 +104,7 @@ async function launch(root: string, task: Task): Promise<boolean> {
   }
 }
 
-async function launchInner(root: string, task: Task): Promise<boolean> {
+async function launchInner(root: string, task: Task, mode: AgentMode = "work"): Promise<boolean> {
   const project = projectForRoot(root);
   if (!project) {
     useTasks.getState().setNotice(`Open ${root} as a project to run an agent.`, true);
@@ -93,7 +115,7 @@ async function launchInner(root: string, task: Task): Promise<boolean> {
   const ws = useWorkspace.getState();
   const model = projectModel(project);
   const modelFlag = model === "default" ? "" : ` --model ${shq(model)}`;
-  const cmd = `cd ${shq(project.rootPath)} && claude${modelFlag} ${shq(buildPrompt(task, project.rootPath))}`;
+  const cmd = `cd ${shq(project.rootPath)} && claude${modelFlag} ${shq(buildPrompt(task, project.rootPath, mode))}`;
   const paneId = ws.addTerminal(project.id, {
     claude: true,
     command: cmd,
@@ -102,9 +124,62 @@ async function launchInner(root: string, task: Task): Promise<boolean> {
     ephemeral: true,
   });
   if (!paneId) return false;
+  if (mode === "plan") {
+    await useTasks.getState().update(root, task.id, { agent: "planning", paneId, log: "Claude planner started in tCon" });
+    return true;
+  }
   const status = task.status === "inbox" || task.status === "todo" ? "in-progress" : undefined;
   await useTasks.getState().update(root, task.id, { agent: "running", paneId, status, log: "Claude agent started in tCon" });
   return true;
+}
+
+/** Split `items` into at most `n` chunks of near-equal size, keeping order. */
+export function chunk<T>(items: T[], n: number): T[][] {
+  const k = Math.max(1, Math.min(n, items.length));
+  const size = Math.ceil(items.length / k);
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/** "Plan with Claude": triage agents that write a plan for each task and move it to Todo,
+ *  without touching code. Tasks are split over up to `maxAgents` planner sessions; planning
+ *  doesn't wait for a free slot (planners only edit the task files). */
+export async function planTasks(root: string, ids: string[]): Promise<number> {
+  root = trim(root);
+  const store = useTasks.getState();
+  await store.load(root);
+  const state = useTasks.getState().boards[root]?.state;
+  const project = projectForRoot(root);
+  if (!state) return 0;
+  if (!project) {
+    store.setNotice(`Open ${root} as a project to run an agent.`, true);
+    return 0;
+  }
+  const tasks = ids
+    .map((id) => state.tasks.find((t) => t.id === id))
+    .filter((t): t is Task => !!t && t.status !== "done" && !(livePane(t) && ["running", "blocked", "planning"].includes(t.agent)));
+  if (!tasks.length) return 0;
+  if (hasBackend()) await tasksApi.init(root).catch(() => {});
+  const model = projectModel(project);
+  const modelFlag = model === "default" ? "" : ` --model ${shq(model)}`;
+  let started = 0;
+  for (const group of chunk(tasks, Math.max(1, state.board.settings.maxAgents || 1))) {
+    const keys = group.map((t) => keyOf(root, t.id));
+    if (keys.some((k) => busyKeys.has(k))) continue;
+    keys.forEach((k) => busyKeys.add(k));
+    try {
+      const cmd = `cd ${shq(project.rootPath)} && claude${modelFlag} ${shq(buildPlanPrompt(group, project.rootPath))}`;
+      const title = group.length === 1 ? `Plan ${group[0].id} · ${oneLine(group[0].title)}` : `Plan ${group.map((t) => t.id).join(", ")}`;
+      const paneId = useWorkspace.getState().addTerminal(project.id, { claude: true, command: cmd, title: title.slice(0, 60), ephemeral: true });
+      if (!paneId) continue;
+      for (const t of group) await useTasks.getState().update(root, t.id, { agent: "planning", paneId, log: "Claude planner started in tCon" });
+      started += group.length;
+    } finally {
+      keys.forEach((k) => busyKeys.delete(k));
+    }
+  }
+  return started;
 }
 
 /** "Let Claude work on this": start now, or queue when the board's agent limit is reached. */
@@ -115,7 +190,7 @@ export async function startAgent(root: string, id: string): Promise<void> {
   const state = useTasks.getState().boards[root]?.state;
   const task = state?.tasks.find((t) => t.id === id);
   if (!state || !task) return;
-  if (livePane(task) && (task.agent === "running" || task.agent === "blocked")) {
+  if (livePane(task) && (task.agent === "running" || task.agent === "blocked" || task.agent === "planning")) {
     openAgentTerminal(root, id);
     return;
   }
@@ -186,11 +261,12 @@ async function reapDeadAgents(root: string) {
   for (const stale of state.tasks) {
     const key = keyOf(root, stale.id);
     const t = taskById(root, stale.id);
-    if (!t || busyKeys.has(key) || !t.paneId || !(t.agent === "running" || t.agent === "blocked") || livePane(t)) continue;
+    if (!t || busyKeys.has(key) || !t.paneId || !(t.agent === "running" || t.agent === "blocked" || t.agent === "planning") || livePane(t)) continue;
     busyKeys.add(key);
     changed = true;
     try {
-      await useTasks.getState().update(root, t.id, { agent: "idle", paneId: "", log: "Agent terminal closed — session ended" });
+      const msg = t.agent === "planning" ? "Planner terminal closed before the plan was finished" : "Agent terminal closed — session ended";
+      await useTasks.getState().update(root, t.id, { agent: "idle", paneId: "", log: msg });
     } finally {
       busyKeys.delete(key);
     }
@@ -198,11 +274,25 @@ async function reapDeadAgents(root: string) {
   if (changed) void pumpQueue(root);
 }
 
+async function skillDirs(): Promise<string[]> {
+  const home = await api.homeDir();
+  return [`${home}/.claude`, ...useAccounts.getState().accounts.map((a) => a.configDir).filter((d): d is string => !!d)];
+}
+
 /** Install the tcon-tasks skill into ~/.claude and every configured account's config dir. */
 export async function installSkill(): Promise<string[]> {
-  const home = await api.homeDir();
-  const dirs = [`${home}/.claude`, ...useAccounts.getState().accounts.map((a) => a.configDir).filter((d): d is string => !!d)];
-  return tasksApi.installSkill(dirs);
+  return tasksApi.installSkill(await skillDirs());
+}
+
+/** Bring installed copies of the skill up to date with this tCon version. */
+async function refreshInstalledSkill() {
+  if (!hasBackend()) return;
+  try {
+    const updated = await tasksApi.refreshSkill(await skillDirs());
+    if (updated.length) useTasks.getState().setNotice(`Updated the tcon-tasks skill to this tCon version (${updated.length} location${updated.length === 1 ? "" : "s"}).`);
+  } catch {
+    /* best effort */
+  }
 }
 
 // ---------------- runtime ----------------
@@ -212,6 +302,7 @@ let runtimeInstalled = false;
 export function installAgentRuntime(): () => void {
   if (runtimeInstalled) return () => {};
   runtimeInstalled = true;
+  window.setTimeout(() => void refreshInstalledSkill(), 3000);
 
   const offLoad = onBoardLoaded((root, prev, next) => {
     // Ask to start Claude when a task (newly) enters Todo. Never on the first load of a board.

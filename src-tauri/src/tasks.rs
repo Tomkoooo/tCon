@@ -792,6 +792,28 @@ pub fn install_skill(config_dirs: &[String]) -> Result<Vec<String>, String> {
     Ok(written)
 }
 
+/// Rewrite copies of the skill that are already installed but outdated (after a tCon update).
+/// Config dirs without the skill are left alone. Returns the paths that were updated.
+pub fn refresh_skill(config_dirs: &[String]) -> Result<Vec<String>, String> {
+    let mut written = Vec::new();
+    let mut seen = HashSet::new();
+    for d in config_dirs {
+        let d = d.trim_end_matches('/');
+        if d.is_empty() || !seen.insert(d.to_string()) {
+            continue;
+        }
+        let p = Path::new(d).join("skills").join(SKILL_NAME).join("SKILL.md");
+        match fs::read_to_string(&p) {
+            Ok(cur) if cur != SKILL_MD => {
+                write_atomic(&p, SKILL_MD)?;
+                written.push(p.to_string_lossy().into_owned());
+            }
+            _ => {}
+        }
+    }
+    Ok(written)
+}
+
 // ---------------- tauri commands ----------------
 
 async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
@@ -838,6 +860,11 @@ pub async fn task_delete(root: String, id: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn tasks_save_settings(root: String, settings: BoardSettings) -> Result<Board, String> {
     blocking(move || save_settings(&root, settings)).await
+}
+
+#[tauri::command]
+pub async fn tasks_refresh_skill(config_dirs: Vec<String>) -> Result<Vec<String>, String> {
+    blocking(move || refresh_skill(&config_dirs)).await
 }
 
 #[tauri::command]
@@ -996,6 +1023,23 @@ mod tests {
         assert!(task_path("/x", "../etc").is_err());
         assert!(task_path("/x", "").is_err());
         assert!(task_path("/x", "T-1").is_ok());
+    }
+
+    #[test]
+    fn refresh_skill_only_touches_installed_copies() {
+        let root = tmp("skill");
+        let a = root.join("a");
+        let b = root.join("b");
+        let pa = a.join("skills/tcon-tasks/SKILL.md");
+        fs::create_dir_all(pa.parent().unwrap()).unwrap();
+        fs::write(&pa, "old").unwrap();
+        let dirs = vec![a.to_string_lossy().into_owned(), b.to_string_lossy().into_owned()];
+        let out = refresh_skill(&dirs).unwrap();
+        assert_eq!(out.len(), 1);
+        assert_eq!(fs::read_to_string(&pa).unwrap(), SKILL_MD);
+        assert!(!b.join("skills").exists());
+        assert!(refresh_skill(&dirs).unwrap().is_empty());
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
