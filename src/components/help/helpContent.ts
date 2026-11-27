@@ -66,7 +66,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     items: [
       { title: "Session status", how: "Claude tabs show working, needs you, done or error. The same state appears in the status bar and on the Dock badge." },
       { title: "Jump to the session that needs you", how: "Goes to a blocked session first, then to unseen done or error ones.", commands: ["tcon.jumpToAttention"], action: { label: "Jump now", command: "tcon.jumpToAttention" } },
-      { title: "Notifications", how: "When a session in a hidden tab needs you, tCon sends a desktop notification. Allow tCon in System Settings → Notifications." },
+      { title: "Notifications", how: "When a Claude session needs you, finishes or fails out of view, tCon sends a desktop notification, and the session's tab and terminal pulse until you answer. Choose which events notify in Settings → Notifications. Allow tCon in System Settings → Notifications." },
       { title: "Choose a model", how: "Set the default Claude model in Settings → Claude, or override it per project in Project Settings.", action: { label: "Claude settings", settings: "claude" } },
       { title: "How status works", how: "Claude Code writes a status escape sequence (OSC 7501) to its terminal. tCon reads and strips it; no plugin or API key is needed." },
     ],

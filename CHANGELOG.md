@@ -8,6 +8,8 @@ Each release's section becomes its GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- Notifications settings: choose whether Claude sessions notify for every state change, only when they need you, or never; optionally also for the visible session while tCon is in the background; and whether task agents notify.
+- A Claude session that needs you now pulses on its terminal, its terminal tab and its project tab until you answer.
 - Quick panel: drag it by its top edge, project bar or footer to move it. It reopens where you left it; double-click the handle to centre it again.
 
 ### Changed

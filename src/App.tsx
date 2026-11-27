@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
-import { findPane, isPaneVisible, useWorkspace } from "./store/workspace";
+import { useWorkspace } from "./store/workspace";
+import { notifyPaneStatus } from "./notify";
 import { scheduleGitRefresh } from "./store/gitRefresh";
 import { installFocusRefresh, onRefresh } from "./refresh";
 import type { FsChangedEvent, ProgramStatus } from "./types";
@@ -29,7 +29,7 @@ function useBackendEvents() {
         const prev = st.statuses[payload.paneId]?.state;
         st.setProgramStatus(payload.paneId, payload.status);
         const next = payload.status.state;
-        if (next !== prev && (next === "blocked" || next === "done" || next === "error")) void notify(payload.paneId, payload.status);
+        if (next !== prev && (next === "blocked" || next === "done" || next === "error")) void notifyPaneStatus(payload.paneId, payload.status);
       }),
     );
     unsubs.push(
@@ -50,23 +50,6 @@ function useBackendEvents() {
       offFocus();
     };
   }, []);
-}
-
-async function notify(paneId: string, status: ProgramStatus) {
-  const st = useWorkspace.getState();
-  const found = findPane(st, paneId);
-  if (!found) return;
-  const [project, pane] = found;
-  if (isPaneVisible(st, paneId)) return;
-  try {
-    let ok = await isPermissionGranted();
-    if (!ok) ok = (await requestPermission()) === "granted";
-    if (!ok) return;
-    const what = status.state === "blocked" ? `needs you${status.kind ? ` (${status.kind})` : ""}` : status.state === "done" ? "is done" : "hit an error";
-    sendNotification({ title: `${project.name} · ${status.title || pane.title} ${what}`, body: status.msg || project.rootPath });
-  } catch {
-    /* notifications unavailable */
-  }
 }
 
 // ---------- git status ----------
