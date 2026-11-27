@@ -8,6 +8,9 @@ Each release's section becomes its GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- **Go to File** (⌘P): fuzzy-find any file in the project by name and open it. It respects `.gitignore` and skips `node_modules` and build folders.
+- **Find in Files** (⇧⌘F): search the project's text, with match case, whole word and regex toggles. Picking a result opens the file at that line.
+- **Switch Project** (⌘O): one list of open and recently used projects. ↵ switches to an open project or reopens a closed one, ⌘↵ opens it with Claude.
 - **Tasks: Import Notes…** (command palette and board menu): paste meeting notes or a memo and Claude splits them into Inbox cards, keeping each item's original text. Send everything to the active project or let Claude distribute the items over your open projects (it asks when unsure), and optionally plan them right after.
 - Task agents survive interruptions. Each agent runs with its own Claude session id; when tCon closes or the Mac restarts, the card shows **Interrupted** and tCon offers to resume it where it stopped (or resumes automatically, Queue panel setting). An agent that exits with an error is resumed up to 3 times with growing pauses before it's marked failed.
 - Usage limits: when Claude reports a usage limit in an agent's terminal, the card shows **Usage limit**, the board's queue stops so new agents don't fail too, and the agent continues a minute after the reset time, or right away when you switch to another account (its conversation is copied to that account).

@@ -1,3 +1,4 @@
+import { SearchHost } from "./search/Pickers";
 import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -142,6 +143,7 @@ export default function App() {
       <StatusBar />
       <TasksHost />
       <UpdateNotice />
+      <SearchHost />
       {modal?.kind === "newProject" && <NewProjectModal />}
       {modal?.kind === "profiles" && <ProfilesModal />}
       {modal?.kind === "projectSettings" && <ProjectSettingsModal projectId={modal.projectId} />}
