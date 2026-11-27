@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Terminal T logo">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a1d24"/>
+      <stop offset="100%" stop-color="#0d0f14"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#161a22"/>
+      <stop offset="100%" stop-color="#0f1218"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Terminal body -->
+  <rect x="14" y="22" width="100" height="84" rx="12" ry="12" fill="url(#bg)" stroke="#2a3140" stroke-width="2"/>
+
+  <!-- Title bar -->
+  <path d="M14 34h100c0-6.627-5.373-12-12-12H26c-6.627 0-12 5.373-12 12z" fill="#222833"/>
+  <circle cx="30" cy="28" r="3.5" fill="#ff5f57"/>
+  <circle cx="42" cy="28" r="3.5" fill="#febc2e"/>
+  <circle cx="54" cy="28" r="3.5" fill="#28c840"/>
+
+  <!-- Screen area -->
+  <rect x="22" y="40" width="84" height="56" rx="6" ry="6" fill="url(#screen)"/>
+
+  <!-- Prompt line -->
+  <text x="30" y="62" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="14" font-weight="600" fill="#7ee787">›</text>
+  <rect x="42" y="52" width="8" height="14" rx="1.5" fill="#7ee787"/>
+
+  <!-- Secondary dim lines -->
+  <rect x="30" y="74" width="36" height="3" rx="1.5" fill="#2d3548"/>
+  <rect x="30" y="82" width="24" height="3" rx="1.5" fill="#2d3548"/>
+
+  <!-- Bigger "t" badge — tDarts red #FF441F -->
+  <circle cx="96" cy="86" r="18" fill="#0d1117" stroke="#FF441F" stroke-width="2.5"/>
+  <text x="96" y="93.5" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="22" font-weight="700" fill="#FF441F">t</text>
+</svg>
