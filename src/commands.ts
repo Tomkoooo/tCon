@@ -9,6 +9,7 @@ import { useTheming } from "./theming/store";
 import { refreshWorkspace } from "./refresh";
 import { openBoard, quickAddTask, showTasksView } from "./tasks/actions";
 import { openDevServer, promptOpenUrl, toggleBrowserView } from "./browser/actions";
+import { checkForUpdates } from "./updater";
 
 export interface Keybinding { key: string; command: string; when?: string; args?: unknown }
 
@@ -119,6 +120,7 @@ export const COMMANDS: Command[] = [
   { id: "browser.openUrl", title: "Browser: Open URL…", run: promptOpenUrl },
   { id: "browser.openDevServer", title: "Browser: Open Dev Server", run: () => openDevServer() },
   { id: "browser.showView", title: "Browser: Show Browser View", run: toggleBrowserView },
+  { id: "tcon.checkForUpdates", title: "Check for Updates…", run: checkForUpdates },
 ];
 
 export const COMMAND_MAP = new Map(COMMANDS.map((c) => [c.id, c]));

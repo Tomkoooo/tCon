@@ -6,6 +6,7 @@ import { COMMAND_MAP, COMMANDS, effectiveBindings, keyLabel, type Keybinding } f
 import { useTheming } from "../../theming/store";
 import { useWorkspace } from "../../store/workspace";
 import { Icon } from "../icons";
+import { useUpdater } from "../../updater";
 import { HELP_SECTIONS, SHORTCUTS_SECTION_ID, type HelpAction, type HelpItem } from "./helpContent";
 import "./help.css";
 
@@ -105,6 +106,7 @@ export function HelpView() {
             {s.title}
           </button>
         ))}
+        <HelpVersion />
       </nav>
       <div className="help-main" ref={mainRef}>
         <div className="help-search">
@@ -192,6 +194,21 @@ export function HelpView() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Running version + update state, at the bottom of the table of contents. */
+function HelpVersion() {
+  const current = useUpdater((s) => s.current);
+  const available = useUpdater((s) => s.available);
+  useEffect(() => void useUpdater.getState().loadVersion(), []);
+  return (
+    <div className="help-version">
+      <span>tCon {current ?? ""}</span>
+      <button className="help-link" onClick={() => useWorkspace.getState().setModal({ kind: "profiles", section: "updates" })}>
+        {available ? `${available.version} available` : "Check for updates"}
+      </button>
     </div>
   );
 }

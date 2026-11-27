@@ -63,3 +63,5 @@
 }
 .help-keys tr:hover .help-run, .help-run:focus-visible { opacity: 1; }
 .help-run:hover { background: var(--bg-3); color: var(--fg); }
+.help-version { margin-top: auto; padding: var(--sp-3) var(--sp-2) 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-size: var(--fs-xs); color: var(--fg-dim); }
+.help-version .help-link { margin-left: 0; padding: 0; }

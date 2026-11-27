@@ -16,6 +16,8 @@ import { TasksHost } from "./components/tasks/TasksHost";
 import { useBackgroundBridge } from "./background/bridge";
 import { useTheming } from "./theming/store";
 import { COMMAND_MAP, effectiveBindings, resolveKey } from "./commands";
+import { UpdateNotice } from "./components/UpdateNotice";
+import { startUpdateChecks } from "./updater";
 
 // ---------- backend events ----------
 function useBackendEvents() {
@@ -129,6 +131,7 @@ export default function App() {
   useDockBadge();
   useBackgroundBridge();
   useShortcuts();
+  useEffect(startUpdateChecks, []);
 
   return (
     <div className="app">
@@ -149,6 +152,7 @@ export default function App() {
       </div>
       <StatusBar />
       <TasksHost />
+      <UpdateNotice />
       {modal?.kind === "newProject" && <NewProjectModal />}
       {modal?.kind === "profiles" && <ProfilesModal />}
       {modal?.kind === "projectSettings" && <ProjectSettingsModal projectId={modal.projectId} />}

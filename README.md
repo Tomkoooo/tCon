@@ -184,17 +184,24 @@ cd src-tauri && cargo test
 
 ## Releases
 
-Every push to `main` runs [`release.yml`](.github/workflows/release.yml). If the version in
-`src-tauri/tauri.conf.json` doesn't have a release yet, it builds macOS (arm64 and x64) and Linux
-bundles and publishes them as `v<version>`. So bump the version to ship. Pull requests and branches run
+Versions follow SemVer; below 1.0 they're alphas (`0.1.0-alpha.1`). Every push to `main` runs
+[`release.yml`](.github/workflows/release.yml). If the version doesn't have a release yet, it builds
+macOS (arm64 and x64) and Linux bundles, signs the updater bundles, and publishes `v<version>` with
+its [CHANGELOG](CHANGELOG.md) section as release notes. To ship: `npm run version:bump -- alpha`
+(or `patch`, `minor`, an explicit version), fill in the changelog, push to `main`. Details in
+[CLAUDE.md](CLAUDE.md#releasing). Pull requests and branches run
 [`ci.yml`](.github/workflows/ci.yml): typecheck, frontend build, `cargo test` and clippy.
+
+tCon updates itself: it checks GitHub shortly after launch and every 6 hours, and installs a
+signed update when you click **Install & restart** (Settings → Updates, or **tCon → Check for
+Updates…**).
 
 ## Roadmap
 
 - Windows support
 - Plugin API with a GitHub template and install from GitHub
 - Custom board columns and per-task git worktrees for parallel agents
-- Notarized macOS builds and auto-update
+- Notarized macOS builds
 
 ## Contributing
 

@@ -164,7 +164,9 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: "updates",
     title: "Updates & versions",
     items: [
-      { title: "Auto-updates", how: "tCon checks GitHub releases for new versions; downloads are signature-checked before they install.", action: { label: "Update settings", settings: "updates" } },
+      { title: "Auto-updates", how: "tCon checks GitHub releases shortly after launch and every 6 hours, and shows a notice when a new version is out. Downloads are signature-checked before they install.", action: { label: "Update settings", settings: "updates" } },
+      { title: "Check for updates", how: "Look for a new version now. Also in the tCon menu and Settings → Updates.", commands: ["tcon.checkForUpdates"], action: { label: "Check for updates", command: "tcon.checkForUpdates" } },
+      { title: "Versions", how: "Before 1.0 every release is an alpha (0.1.0-alpha.1, …) and is delivered as a normal update." },
       { title: "Release notes", how: "Each version is a GitHub release with its changes.", action: { label: "Open releases", url: "https://github.com/Tomkoooo/tCon/releases" } },
     ],
   },

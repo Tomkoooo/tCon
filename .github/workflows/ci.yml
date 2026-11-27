@@ -32,6 +32,8 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npx tsc --noEmit
       - run: npm run build
+      # package.json, Cargo.toml/Cargo.lock and tauri.conf.json must carry the same version
+      - run: npm run version:check
 
   rust:
     name: Rust (clippy + test)

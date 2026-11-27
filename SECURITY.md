@@ -88,6 +88,9 @@ decrypted).
   - Third-party GitHub Actions are pinned to commit SHAs.
   - Workflow tokens are read-only, except the job that publishes releases.
   - `npm audit` (high and critical) and `cargo audit` run on every push and weekly.
+- **Tampered updates.** Auto-updates are signed with tCon's updater key (minisign). The app
+  verifies each download against the public key built into it before installing, and fetches
+  them in Rust over HTTPS from GitHub releases, so the UI's CSP stays closed to the network.
 
 ### What tCon cannot protect against
 

@@ -1,6 +1,6 @@
 [package]
 name = "tcon"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2024"
@@ -41,6 +41,9 @@ tauri-plugin-dialog = "2.8.4"
 tauri-plugin-notification = "2.8.1"
 rusqlite = { version = "0.43.0", features = ["bundled"] }
 sha2 = "0.10"
+# Auto-updates from GitHub releases (signed latest.json) + relaunch after installing.
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 
 # Runtime app icon (src/appicon.rs): window icons from PNG off macOS, the Dock icon via AppKit on macOS.
 [target.'cfg(not(target_os = "macos"))'.dependencies]

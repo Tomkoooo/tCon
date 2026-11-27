@@ -17,6 +17,7 @@ import { SecuritySection } from "./SecuritySettings";
 import { BackgroundSection } from "./BackgroundSettings";
 import { SettingRow, SettingsGroup, SettingsSearch, SettingsSection } from "./settingsKit";
 import { BrowserSection } from "./browser/BrowserSettings";
+import { UpdatesSection } from "./UpdateSettings";
 import { Badge, CommitInput, Segmented } from "./ui";
 import { Icon } from "./icons";
 
@@ -29,6 +30,7 @@ const SECTIONS = [
   { id: "background", label: "Quick panel & background", icon: "M2.5 3.5h11v9h-11zM5 6.5h6M5 9.5h3.5" },
   { id: "keyboard", label: "Keyboard Shortcuts", icon: "M1.5 4h13v8h-13zM4 6.5h1m2 0h1m2 0h1M4 9.5h8" },
   { id: "security", label: "Security", icon: "M8 1.5l5 2v4c0 3.2-2.2 5.6-5 7-2.8-1.4-5-3.8-5-7v-4zM5.8 8l1.6 1.6 2.9-3" },
+  { id: "updates", label: "Updates", icon: "M13 8a5 5 0 1 1-1.5-3.6M13 2.5v3h-3" },
   { id: "advanced", label: "Advanced", icon: "M3 4h10M3 8h10M3 12h10M6 2.5v3M10 6.5v3M5 10.5v3" },
 ] as const;
 type SectionId = (typeof SECTIONS)[number]["id"];
@@ -96,6 +98,7 @@ export function ProfilesModal() {
             {show("background") && <BackgroundSection />}
             {show("keyboard") && <KeybindingsSection />}
             {show("security") && <SecuritySection />}
+            {show("updates") && <UpdatesSection />}
             {show("advanced") && <AdvancedSection />}
           </SettingsSearch.Provider>
           {q && <div className="settings-empty">No settings match “{q}”</div>}

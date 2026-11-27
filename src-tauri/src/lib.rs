@@ -99,6 +99,7 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::
         true,
         &[
             &P::about(app, None, None)?,
+            &tauri::menu::MenuItem::with_id(app, "tcon.checkForUpdates", "Check for Updates…", true, None::<&str>)?,
             &P::separator(app)?,
             &P::hide(app, None)?,
             &P::hide_others(app, None)?,
@@ -152,6 +153,9 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        // Auto-updates (src/updater.ts): the check, download and signature verification run here in Rust.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(PtyManager::default())
         .manage(fs::Watchers::default())
         .manage(browser::ChromeState::default())
@@ -160,9 +164,11 @@ pub fn run() {
             app.manage(Db::open(&dir)?);
             app.set_menu(build_menu(app.handle())?)?;
             background::setup(app.handle())?;
+            // Custom menu items (tCon Help, Check for Updates…) are forwarded to the frontend as "menu-command".
             app.on_menu_event(|app, ev| {
-                if ev.id().as_ref() == "tcon.help" {
-                    let _ = tauri::Emitter::emit(app, "menu-command", "tcon.help");
+                let id = ev.id().as_ref();
+                if id == "tcon.help" || id == "tcon.checkForUpdates" {
+                    let _ = tauri::Emitter::emit(app, "menu-command", id);
                 }
             });
             Ok(())

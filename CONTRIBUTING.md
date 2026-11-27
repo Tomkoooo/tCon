@@ -18,6 +18,9 @@ npm run tauri dev
 
 The React/TypeScript frontend lives in `src/`, the Rust backend in `src-tauri/`.
 
+Project rules and code conventions (also followed by AI coding agents) are in
+[CLAUDE.md](CLAUDE.md) (`AGENTS.md` is a link to it). Read it before your first change.
+
 ## Checks
 
 Run these before opening a pull request (CI runs them too):
@@ -33,11 +36,15 @@ cd src-tauri && cargo clippy --all-targets
 
 1. Fork the repository and create a branch from `main` (e.g. `feat/terminal-search`, `fix/git-graph-colors`).
 2. Keep each PR focused on one change; open an issue first for larger features.
-3. Make sure the checks above pass and fill in the PR template.
-4. A maintainer reviews the PR; once approved it is merged into `main`.
+3. Add a line under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md) for user-facing changes.
+4. Make sure the checks above pass and fill in the PR template.
+5. A maintainer reviews the PR; once approved it is merged into `main`.
 
-Releases are cut automatically from `main` when the version in `src-tauri/tauri.conf.json`,
-`package.json` and `src-tauri/Cargo.toml` is bumped.
+Releases are cut automatically from `main` when the version changes. Maintainers bump it with
+`npm run version:bump -- <version|patch|minor|alpha|beta|rc|release>`, which keeps
+`package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` in sync and moves the
+Unreleased notes into the new version's section. See [CLAUDE.md](CLAUDE.md#versions) for the
+version scheme.
 
 ## Commit style
 
