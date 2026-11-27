@@ -2,6 +2,7 @@
 // task's project, with the active account's env. The task file is the shared state: Claude
 // updates status/agent/log per the tCon task protocol (.tcon/PROTOCOL.md = the tcon-tasks skill),
 // and the app mirrors the pane's live OSC status (working / needs you / done) onto the card.
+import { projectModel } from "../claudeModel";
 import { api } from "../api";
 import { findPane, useWorkspace } from "../store/workspace";
 import { useAccounts } from "../store/accounts";
@@ -90,7 +91,9 @@ async function launchInner(root: string, task: Task): Promise<boolean> {
   // Make sure .tcon/PROTOCOL.md exists (the prompt points at it).
   if (hasBackend()) await tasksApi.init(root).catch(() => {});
   const ws = useWorkspace.getState();
-  const cmd = `cd ${shq(project.rootPath)} && claude ${shq(buildPrompt(task, project.rootPath))}`;
+  const model = projectModel(project);
+  const modelFlag = model === "default" ? "" : ` --model ${shq(model)}`;
+  const cmd = `cd ${shq(project.rootPath)} && claude${modelFlag} ${shq(buildPrompt(task, project.rootPath))}`;
   const paneId = ws.addTerminal(project.id, {
     claude: true,
     command: cmd,
