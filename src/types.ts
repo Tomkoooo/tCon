@@ -53,8 +53,9 @@ export interface EditorTab {
   /** VS Code-style preview tab: replaced by the next single-click open until pinned. */
   preview?: boolean;
   diff?: { file: string | null; staged: boolean } | null;
-  /** non-file editor: "board" = the project's task board (path is virtual), "browser" = a built-in browser page (path = its URL) */
-  kind?: "board" | "browser";
+  /** non-file editor: "board" = the project's task board (path is virtual), "browser" = a built-in browser page (path = its URL),
+   *  "help" = the Help page (path is virtual), "commit" = one commit's changes (path = "git-commit:<full sha>") */
+  kind?: "board" | "browser" | "help" | "commit";
 }
 export interface EditorGroup { id: string; tabs: EditorTab[]; activeTabId: string | null }
 
@@ -124,7 +125,8 @@ export type GitOp =
   | { op: "pull" }
   | { op: "fetch" }
   | { op: "checkout"; branch: string }
-  | { op: "createBranch"; name: string }
+  | { op: "createBranch"; name: string; from?: string | null }
+  | { op: "checkoutDetached"; commit: string }
   | { op: "stash" }
   | { op: "stashPop" };
 
@@ -142,6 +144,11 @@ export interface AuthStatus {
 }
 export type CommitSync = "outgoing" | "incoming" | "local";
 export interface GitCommit { id: string; shortId: string; summary: string; author: string; time: number; parents: string[]; refs: string[]; sync?: CommitSync | null }
+/** git_commit_details: lazily loaded for the graph's hover card. */
+export interface GitCommitDetails {
+  id: string; summary: string; body: string; author: string; authorEmail: string; time: number; parents: string[];
+  filesChanged: number; insertions: number; deletions: number; remoteUrl?: string | null;
+}
 export interface GitBranch { name: string; isRemote: boolean; isHead: boolean; upstream?: string | null; target: string }
 export interface GitWorktree { name: string; path: string; branch?: string | null; isMain: boolean }
 

@@ -1,6 +1,8 @@
 // Commands + keybindings (VS Code keybindings.json semantics: user entries are added on top of
 // the defaults, "-command" removes a default binding, "when" supports editorFocus/terminalFocus).
 import { hasEditors, useWorkspace } from "./store/workspace";
+import { listen } from "@tauri-apps/api/event";
+import { openHelp } from "./components/help/actions";
 import { terminals } from "./terminal/registry";
 import { closeEditors } from "./components/editor/editorActions";
 import { useTheming } from "./theming/store";
@@ -64,6 +66,7 @@ export const COMMANDS: Command[] = [
   { id: "tcon.manageAccounts", title: "Manage Claude Accounts…", run: () => ws().setModal({ kind: "profiles", section: "accounts" }) },
   { id: "tcon.openSettingsJson", title: "Open Settings (JSON)", run: () => void openConfigFile("settings.json") },
   { id: "tcon.openKeybindingsJson", title: "Open Keyboard Shortcuts (JSON)", run: () => void openConfigFile("keybindings.json") },
+  { id: "tcon.help", title: "Help: Show All Features", run: openHelp },
   { id: "tcon.jumpToAttention", title: "Jump to Session Needing Attention", run: jumpToAttention },
   {
     id: "tcon.selectProject",
@@ -123,6 +126,7 @@ export const COMMAND_MAP = new Map(COMMANDS.map((c) => [c.id, c]));
 export const DEFAULT_KEYBINDINGS: Keybinding[] = [
   { key: "cmd+t", command: "tcon.newProject" },
   { key: "cmd+,", command: "tcon.openSettings" },
+  { key: "f1", command: "tcon.help" },
   { key: "cmd+shift+r", command: "tcon.refresh" },
   { key: "cmd+j", command: "tcon.jumpToAttention" },
   ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({ key: `cmd+${n}`, command: "tcon.selectProject", args: n })),
@@ -261,6 +265,9 @@ export function keyFor(command: string, bindings: Keybinding[]): string | undefi
   const b = bindings.find((x) => x.command === command);
   return b ? keyLabel(b.key) : undefined;
 }
+
+// Help → tCon Help in the app menu (build_menu in src-tauri/src/lib.rs) arrives as "menu-command".
+listen<string>("menu-command", (e) => e.payload === "tcon.help" && openHelp()).catch(() => { /* not running inside Tauri */ });
 
 async function openConfigFile(name: "settings.json" | "keybindings.json") {
   const dir = await useTheming.getState().ensureDir();

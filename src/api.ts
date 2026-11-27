@@ -1,7 +1,7 @@
 // Typed wrappers around Tauri commands. All backend access goes through here.
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
-  AuthStatus, FileContent, FsEntry, GitBranch, GitCommit, GitOp, GitStatus, GitWorktree, Profile, RecentPath,
+  AuthStatus, FileContent, FsEntry, GitBranch, GitCommit, GitCommitDetails, GitOp, GitStatus, GitWorktree, Profile, RecentPath,
 } from "./types";
 
 export interface SpawnOptions {
@@ -39,7 +39,9 @@ export const api = {
 
   // Git
   gitStatus: (path: string) => invoke<GitStatus>("git_status", { path }),
-  gitLog: (path: string, limit = 200) => invoke<GitCommit[]>("git_log", { path, limit }),
+  gitLog: (path: string, limit = 200, currentOnly = false) => invoke<GitCommit[]>("git_log", { path, limit, currentOnly }),
+  gitCommitDetails: (root: string, id: string) => invoke<GitCommitDetails>("git_commit_details", { root, id }),
+  gitCommitDiff: (root: string, id: string) => invoke<string>("git_commit_diff", { root, id }),
   gitBranches: (path: string) => invoke<GitBranch[]>("git_branches", { path }),
   gitWorktrees: (path: string) => invoke<GitWorktree[]>("git_worktrees", { path }),
   gitDiff: (path: string, file: string | null, staged: boolean) => invoke<string>("git_diff", { path, file, staged }),

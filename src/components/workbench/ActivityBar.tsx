@@ -5,6 +5,7 @@ import { layoutMenuItems } from "./layoutMenu";
 import { useTasks } from "../../tasks/store";
 import { Icon } from "../icons";
 import "../../browser/store"; // subscribes to browser / dev-server events
+import { openHelp } from "../help/actions";
 
 export function ActivityBar({ project }: { project: Project }) {
   const updateProject = useWorkspace((s) => s.updateProject);
@@ -39,6 +40,9 @@ export function ActivityBar({ project }: { project: Project }) {
         <Icon name="globe" size={22} />
       </button>
       <span style={{ flex: 1 }} />
+      <button className="ab-btn" title="Help (F1)" aria-label="Help" onClick={openHelp}>
+        <Icon name="help" size={20} />
+      </button>
       <button className="ab-btn" title="Layout" aria-label="Layout" onClick={(e) => menu.open(e, layoutMenuItems(project.id))}>
         <Icon name="layout" size={20} />
       </button>

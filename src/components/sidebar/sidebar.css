@@ -234,9 +234,24 @@
 .sb-chip-branch { border-color: color-mix(in srgb, var(--fg) 35%, transparent); color: var(--fg); }
 .sb-chip-tag { border-style: dashed; }
 
+/* ---------- commit graph (VS Code Source Control graph look) ---------- */
+.sb-section-open .sb-section-actions { min-width: 0; overflow: hidden; align-items: center; }
+.sb-graph-repo {
+  flex: 0 1 auto; min-width: 0; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 2px;
+  font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--fg-dim); font-size: var(--fs-s);
+}
+.sb-scope-btn {
+  flex: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 3px; height: 20px; padding: 0 var(--sp-1); margin-right: 2px; border: none; border-radius: var(--radius);
+  background: none; color: var(--fg-dim); cursor: pointer; font: inherit; font-size: var(--fs-s); font-weight: 400; text-transform: none; letter-spacing: 0;
+}
+.sb-scope-btn:hover { background: var(--bg-3); color: var(--fg); }
+.sb-section-header .sb-icon-btn { width: 20px; height: 20px; }
+.sb-section-header .sb-section-title { flex: none; }
+
 .sb-graph-row {
   display: flex;
   align-items: center;
+  gap: var(--sp-1);
   height: 22px;
   padding-right: var(--sp-2);
   white-space: nowrap;
@@ -244,16 +259,64 @@
   content-visibility: auto;
   contain-intrinsic-size: auto 22px;
 }
-.sb-graph-row:hover { background: var(--list-hover-bg, var(--bg-3)); }
-.sb-graph-svg { flex: none; overflow: hidden; }
-.sb-graph-text {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding-left: 2px;
+.sb-graph-row:hover, .sb-graph-row.sb-hovered { background: var(--list-hover-bg, var(--bg-3)); }
+.sb-graph-svg { flex: none; overflow: visible; }
+.sb-graph-summary { flex: 1 1 auto; min-width: 48px; overflow: hidden; text-overflow: ellipsis; font-weight: 400; }
+.sb-graph-head .sb-graph-summary { font-weight: 600; color: var(--fg); }
+.sb-graph-row.sb-flash { animation: sb-flash 1.2s ease-out; }
+@keyframes sb-flash { from { background: color-mix(in srgb, var(--accent) 30%, transparent); } to { background: transparent; } }
+
+/* ref badges: tinted with the lane colour (--lane) */
+.sb-refs { flex: 0 1 auto; display: inline-flex; align-items: center; gap: 3px; max-width: 45%; min-width: 0; overflow: hidden; }
+.sb-ref {
+  flex: 0 1 auto; display: inline-flex; align-items: center; gap: 3px; min-width: 0; max-width: 130px; height: 16px; padding: 0 6px 0 4px;
+  border-radius: 8px; border: 1px solid color-mix(in srgb, var(--lane) 55%, transparent);
+  background: color-mix(in srgb, var(--lane) 16%, transparent); color: var(--fg);
+  font-size: var(--fs-xs); line-height: 14px;
 }
-.sb-graph-summary { vertical-align: middle; }
+.sb-ref .icon { color: var(--lane); }
+.sb-ref-label { overflow: hidden; text-overflow: ellipsis; }
+.sb-ref-current { background: color-mix(in srgb, var(--lane) 30%, transparent); border-color: var(--lane); font-weight: 600; }
+.sb-ref-icon, .sb-ref-more { flex: none; }
+.sb-ref-icon { padding: 0 4px; }
+.sb-ref-tag { border-style: dashed; }
+.sb-ref-more { padding: 0 5px; color: var(--fg-dim); border-color: var(--border); background: none; }
+
+/* ---------- commit hover card ---------- */
+.sb-card {
+  position: fixed; z-index: 1000; width: 380px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow: auto;
+  display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3);
+  background: var(--menu-bg, var(--bg-2)); color: var(--menu-fg, var(--fg)); border: 1px solid var(--menu-border, var(--border));
+  border-radius: var(--radius-l); box-shadow: var(--shadow-menu); font-size: var(--fs-m); line-height: 1.45;
+  user-select: text; -webkit-user-select: text; cursor: auto;
+}
+.sb-card-dim { color: var(--fg-dim); }
+.sb-card-who { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.sb-avatar {
+  flex: none; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  color: #fff; font-size: var(--fs-s); font-weight: 600; text-shadow: 0 0 2px rgba(0,0,0,.35);
+}
+.sb-card-author { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-card-when { margin-top: calc(-1 * var(--sp-1)); padding-left: 30px; font-size: var(--fs-s); }
+.sb-card-msg { border-top: 1px solid var(--menu-border, var(--border)); padding-top: var(--sp-2); }
+.sb-card-subject { font-weight: 600; white-space: pre-wrap; word-break: break-word; }
+.sb-card-body { margin-top: var(--sp-1); white-space: pre-wrap; word-break: break-word; max-height: 240px; overflow: auto; font-size: var(--fs-s); }
+.sb-card-loading { font-size: var(--fs-s); margin-top: var(--sp-1); }
+.sb-card-stats { font-size: var(--fs-s); color: var(--fg-dim); }
+.sb-card-add { color: var(--git-added, var(--ok)); }
+.sb-card-del { color: var(--git-deleted, var(--danger)); }
+.sb-card-sync.sb-sync-outgoing { color: var(--sync-out); }
+.sb-card-sync.sb-sync-incoming { color: var(--sync-in); }
+.sb-card-sync.sb-sync-local { color: var(--sync-local); }
+.sb-card-refs .sb-refs { max-width: 100%; flex-wrap: wrap; }
+.sb-card-hash { display: flex; align-items: center; gap: var(--sp-1); color: var(--fg-dim); }
+.sb-card-hash code { font-family: var(--font-mono); font-size: var(--fs-s); color: var(--fg); }
+.sb-card-actions { display: flex; flex-wrap: wrap; gap: 2px var(--sp-1); border-top: 1px solid var(--menu-border, var(--border)); padding-top: var(--sp-2); margin: 0 calc(-1 * var(--sp-1)); }
+.sb-card-link {
+  display: inline-flex; align-items: center; gap: var(--sp-1); height: 22px; padding: 0 var(--sp-1); border: none; border-radius: var(--radius);
+  background: none; color: var(--link-fg, var(--accent)); cursor: pointer; font: inherit; font-size: var(--fs-s); white-space: nowrap;
+}
+.sb-card-link:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 
 /* ---------- Git actions ---------- */
 .sb-git-form { flex: none; display: flex; flex-direction: column; gap: var(--sp-2); padding: 0 var(--sp-2) var(--sp-2) var(--sp-3); }
@@ -291,19 +354,17 @@
 .sb-row-actions .sb-icon-btn { width: 20px; height: 20px; }
 .sb-row-actions .sb-icon-btn:hover { background: color-mix(in srgb, var(--fg) 10%, transparent); }
 
-/* ---------- commit sync state (graph) ---------- */
-.sb-graph-row.sb-sync-outgoing { box-shadow: inset 2px 0 0 var(--sync-out); }
-.sb-graph-row.sb-sync-outgoing .sb-graph-summary { color: var(--fg); font-weight: 600; }
-.sb-graph-row.sb-sync-incoming { box-shadow: inset 2px 0 0 var(--sync-in); }
-.sb-graph-row.sb-sync-incoming .sb-graph-summary { color: var(--sync-in); font-style: italic; }
-.sb-graph-row.sb-sync-local { box-shadow: inset 2px 0 0 color-mix(in srgb, var(--sync-local) 70%, transparent); }
-.sb-graph-row.sb-sync-local .sb-graph-summary { color: color-mix(in srgb, var(--sync-local) 70%, var(--fg)); }
-.sb-sync-badge { flex: none; margin-left: var(--sp-1); display: inline-flex; }
+/* ---------- commit sync state (graph): subtle, so it fits the graph look ---------- */
+.sb-graph-row.sb-sync-outgoing { box-shadow: inset 2px 0 0 color-mix(in srgb, var(--sync-out) 55%, transparent); }
+.sb-graph-row.sb-sync-incoming { box-shadow: inset 2px 0 0 color-mix(in srgb, var(--sync-in) 55%, transparent); }
+.sb-graph-row.sb-sync-incoming .sb-graph-summary { color: var(--fg-dim); font-style: italic; }
+.sb-graph-row.sb-sync-local { box-shadow: inset 2px 0 0 color-mix(in srgb, var(--sync-local) 40%, transparent); }
+.sb-sync-badge { flex: none; display: inline-flex; opacity: .8; }
 .sb-sync-outgoing .sb-sync-badge { color: var(--sync-out); }
 .sb-sync-incoming .sb-sync-badge { color: var(--sync-in); }
-.sb-sync-legend { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); padding: var(--sp-1) var(--sp-3); font-size: var(--fs-xs); color: var(--fg-dim); }
+.sb-sync-legend { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); padding: 2px var(--sp-3) var(--sp-1); font-size: var(--fs-xs); color: var(--fg-dim); }
 .sb-sync-legend span { display: inline-flex; align-items: center; gap: var(--sp-1); }
-.sb-sync-legend i { width: 8px; height: 8px; border-radius: 50%; }
+.sb-sync-legend i { width: 6px; height: 6px; border-radius: 50%; }
 .sb-sync-legend .sb-sync-outgoing i { background: var(--sync-out); }
-.sb-sync-legend .sb-sync-incoming i { border: 1.5px dashed var(--sync-in); width: 7px; height: 7px; }
+.sb-sync-legend .sb-sync-incoming i { border: 1.25px dashed var(--sync-in); width: 6px; height: 6px; }
 .sb-sync-legend .sb-sync-local i { background: var(--sync-local); }

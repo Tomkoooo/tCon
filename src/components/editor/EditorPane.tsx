@@ -343,7 +343,7 @@ function FileEditor({ tabId, path, root }: { tabId: string; path: string; root: 
 
 const MAX_DIFF_LINES = 20000;
 
-function lineClass(line: string): string {
+export function lineClass(line: string): string {
   if (line.startsWith("@@")) return "ed-diff-hunk";
   if (line.startsWith("diff ") || line.startsWith("index ") || line.startsWith("+++ ") || line.startsWith("--- ")
     || line.startsWith("new file") || line.startsWith("deleted file") || line.startsWith("similarity ")

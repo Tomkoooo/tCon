@@ -217,14 +217,33 @@ fn sync_sets(repo: &Repository, cap: usize) -> SyncSets {
 }
 
 pub(crate) fn log_sync(path: &str, limit: usize) -> Result<Vec<GitCommit>, String> {
+    log_scoped_sync(path, limit, false)
+}
+
+/// Upstream tip of the checked-out branch, if it has one.
+fn head_upstream_oid(repo: &Repository) -> Option<Oid> {
+    let head = repo.head().ok().filter(|h| h.is_branch())?;
+    let name = head.name().ok()?.to_string();
+    let up = repo.branch_upstream_name(&name).ok()?;
+    repo.refname_to_id(up.as_str().ok()?).ok()
+}
+
+/// `current_only`: only HEAD and its upstream (the graph's "Auto" filter); otherwise every branch.
+pub(crate) fn log_scoped_sync(path: &str, limit: usize, current_only: bool) -> Result<Vec<GitCommit>, String> {
     let Some(repo) = open(path) else { return Ok(vec![]) };
     let refs = ref_map(&repo);
     let sync = sync_sets(&repo, limit * 4);
     let mut walk = repo.revwalk().map_err(e2s)?;
     walk.set_sorting(Sort::TOPOLOGICAL | Sort::TIME).map_err(e2s)?;
     let _ = walk.push_head();
-    let _ = walk.push_glob("refs/heads");
-    let _ = walk.push_glob("refs/remotes");
+    if current_only {
+        if let Some(up) = head_upstream_oid(&repo) {
+            let _ = walk.push(up);
+        }
+    } else {
+        let _ = walk.push_glob("refs/heads");
+        let _ = walk.push_glob("refs/remotes");
+    }
     let mut out = Vec::new();
     for oid in walk {
         if out.len() >= limit { break; }
@@ -352,6 +371,11 @@ pub(crate) fn diff_sync(path: &str, file: Option<&str>, staged: bool) -> Result<
         opts.include_untracked(true).show_untracked_content(true).recurse_untracked_dirs(true);
         repo.diff_index_to_workdir(None, Some(&mut opts)).map_err(e2s)?
     };
+    patch_text(&diff)
+}
+
+/// Unified patch text of a diff, capped at MAX_DIFF_BYTES.
+fn patch_text(diff: &git2::Diff) -> Result<String, String> {
     let mut buf: Vec<u8> = Vec::new();
     let mut truncated = false;
     let res = diff.print(DiffFormat::Patch, |_d, _h, line| {
@@ -376,6 +400,81 @@ pub(crate) fn diff_sync(path: &str, file: Option<&str>, staged: bool) -> Result<
     Ok(s)
 }
 
+// ---------- single commit ----------
+
+#[derive(Serialize, Default, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCommitDetails {
+    pub id: String,
+    /// first line of the message
+    pub summary: String,
+    /// the rest of the message (may be empty)
+    pub body: String,
+    pub author: String,
+    pub author_email: String,
+    /// author time, ms since the epoch
+    pub time: i64,
+    pub parents: Vec<String>,
+    pub files_changed: usize,
+    pub insertions: usize,
+    pub deletions: usize,
+    /// fetch URL of "origin" (or the first remote), for "Open on GitHub"
+    pub remote_url: Option<String>,
+}
+
+/// Look up a commit by (abbreviated) hex id. Anything else is rejected, so no revspec syntax gets in.
+fn find_commit<'r>(repo: &'r Repository, id: &str) -> Result<git2::Commit<'r>, String> {
+    if id.len() < 4 || id.len() > 40 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(format!("Not a commit id: {id}"));
+    }
+    repo.revparse_single(id).and_then(|o| o.peel_to_commit()).map_err(e2s)
+}
+
+/// Diff of a commit against its first parent (or the empty tree for a root commit).
+fn commit_diff<'r>(repo: &'r Repository, c: &git2::Commit) -> Result<git2::Diff<'r>, String> {
+    let tree = c.tree().map_err(e2s)?;
+    let parent_tree = c.parents().next().and_then(|p| p.tree().ok());
+    repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), None).map_err(e2s)
+}
+
+fn remote_url(repo: &Repository) -> Option<String> {
+    let names = repo.remotes().ok()?;
+    let all: Vec<String> = names.iter().flatten().flatten().map(|s| s.to_string()).collect();
+    let pick = all.iter().find(|n| *n == "origin").or_else(|| all.first())?;
+    repo.find_remote(pick).ok()?.url().ok().map(|s| s.to_string())
+}
+
+pub(crate) fn commit_details_sync(path: &str, id: &str) -> Result<GitCommitDetails, String> {
+    let repo = open(path).ok_or("Not a git repository")?;
+    let c = find_commit(&repo, id)?;
+    let msg = c.message().map(|s| s.to_string()).unwrap_or_else(|_| String::from_utf8_lossy(c.message_bytes()).into_owned());
+    let (summary, body) = match msg.trim_end().split_once('\n') {
+        Some((s, b)) => (s.trim().to_string(), b.trim().to_string()),
+        None => (msg.trim().to_string(), String::new()),
+    };
+    let author = c.author();
+    let stats = commit_diff(&repo, &c).and_then(|d| d.stats().map_err(e2s)).ok();
+    Ok(GitCommitDetails {
+        id: c.id().to_string(),
+        summary,
+        body,
+        author: author.name().map(|s| s.to_string()).unwrap_or_default(),
+        author_email: author.email().map(|s| s.to_string()).unwrap_or_default(),
+        time: author.when().seconds() * 1000,
+        parents: c.parent_ids().map(|p| p.to_string()).collect(),
+        files_changed: stats.as_ref().map_or(0, |s| s.files_changed()),
+        insertions: stats.as_ref().map_or(0, |s| s.insertions()),
+        deletions: stats.as_ref().map_or(0, |s| s.deletions()),
+        remote_url: remote_url(&repo),
+    })
+}
+
+pub(crate) fn commit_diff_sync(path: &str, id: &str) -> Result<String, String> {
+    let repo = open(path).ok_or("Not a git repository")?;
+    let c = find_commit(&repo, id)?;
+    patch_text(&commit_diff(&repo, &c)?)
+}
+
 // ---------- commands ----------
 
 #[tauri::command]
@@ -383,8 +482,16 @@ pub async fn git_status(path: String) -> Result<GitStatus, String> {
     blocking(move || status_sync(&path)).await
 }
 #[tauri::command]
-pub async fn git_log(path: String, limit: usize) -> Result<Vec<GitCommit>, String> {
-    blocking(move || log_sync(&path, limit)).await
+pub async fn git_log(path: String, limit: usize, current_only: Option<bool>) -> Result<Vec<GitCommit>, String> {
+    blocking(move || log_scoped_sync(&path, limit, current_only.unwrap_or(false))).await
+}
+#[tauri::command]
+pub async fn git_commit_details(root: String, id: String) -> Result<GitCommitDetails, String> {
+    blocking(move || commit_details_sync(&root, &id)).await
+}
+#[tauri::command]
+pub async fn git_commit_diff(root: String, id: String) -> Result<String, String> {
+    blocking(move || commit_diff_sync(&root, &id)).await
 }
 #[tauri::command]
 pub async fn git_branches(path: String) -> Result<Vec<GitBranch>, String> {
@@ -495,6 +602,42 @@ mod tests {
         let wts = worktrees_sync(p).unwrap();
         assert_eq!(wts.len(), 1);
         assert!(wts[0].is_main);
+        fs::remove_dir_all(d).ok();
+    }
+
+    #[test]
+    fn commit_details_and_diff() {
+        let d = tmpdir("details");
+        let repo = Repository::init(&d).unwrap();
+        fs::write(d.join("a.txt"), "one\n").unwrap();
+        let c1 = commit_all(&repo, "first");
+        fs::write(d.join("a.txt"), "one\ntwo\nthree\n").unwrap();
+        fs::write(d.join("b.txt"), "b\n").unwrap();
+        let c2 = commit_all(&repo, "Add things\n\nLonger explanation.\nSecond line.");
+        repo.remote("origin", "git@github.com:octo/demo.git").unwrap();
+        let p = d.to_str().unwrap();
+
+        let det = commit_details_sync(p, &c2.to_string()[..7]).unwrap();
+        assert_eq!(det.id, c2.to_string());
+        assert_eq!(det.summary, "Add things");
+        assert_eq!(det.body, "Longer explanation.\nSecond line.");
+        assert_eq!(det.author_email, "t@example.com");
+        assert_eq!(det.parents, vec![c1.to_string()]);
+        assert_eq!((det.files_changed, det.insertions, det.deletions), (2, 3, 0));
+        assert_eq!(det.remote_url.as_deref(), Some("git@github.com:octo/demo.git"));
+
+        let root = commit_details_sync(p, &c1.to_string()).unwrap();
+        assert!(root.parents.is_empty() && root.body.is_empty());
+        assert_eq!(root.files_changed, 1);
+
+        let patch = commit_diff_sync(p, &c2.to_string()).unwrap();
+        assert!(patch.contains("+three") && patch.contains("b.txt"));
+        assert!(commit_details_sync(p, "HEAD~1").is_err());
+        assert!(commit_details_sync(p, "--all").is_err());
+
+        // "Auto" scope: HEAD only, not other branches.
+        repo.branch("side", &repo.find_commit(c1).unwrap(), false).unwrap();
+        assert_eq!(log_scoped_sync(p, 10, true).unwrap().len(), 2);
         fs::remove_dir_all(d).ok();
     }
 }

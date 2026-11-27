@@ -29,10 +29,38 @@ export interface GraphRow {
   isMerge: boolean;
 }
 
+/** Lane colours: theme tokens (VS Code's scmGraph.* colours) with fallbacks. Blue, yellow, pink, green, purple, teal. */
 export const GRAPH_COLORS = [
-  "#0085d9", "#d9008f", "#00d90a", "#d98500", "#a300d9", "#ff0000",
-  "#00d9cc", "#e138e8", "#85d900", "#dc5b23", "#6f24d6", "#ffcc00",
+  "var(--graph-1, #59a4f9)", "var(--graph-2, #ffb000)", "var(--graph-3, #dc267f)",
+  "var(--graph-4, #3fb950)", "var(--graph-5, #b66dff)", "var(--graph-6, #40b0a6)",
 ];
+
+export const graphColor = (c: number) => GRAPH_COLORS[((c % GRAPH_COLORS.length) + GRAPH_COLORS.length) % GRAPH_COLORS.length];
+
+export interface GraphGeometry {
+  /** width of one lane, px */
+  laneW: number;
+  /** row height, px */
+  rowH: number;
+  /** left padding before lane 0, px */
+  pad: number;
+}
+
+/** x of a lane's centre line. */
+export const laneX = (lane: number, g: GraphGeometry) => g.pad + lane * g.laneW + g.laneW / 2;
+
+/**
+ * SVG path for one segment. Straight when it stays in its lane; otherwise a cubic bezier whose
+ * control points sit at the vertical midpoint, so it leaves and enters both lanes vertically
+ * and joins the straight lines of the neighbouring rows without a kink.
+ */
+export function segmentPath(s: GraphSegment, g: GraphGeometry): string {
+  const x1 = laneX(s.x1, g), x2 = laneX(s.x2, g);
+  const y1 = s.y1 * g.rowH, y2 = s.y2 * g.rowH;
+  if (s.x1 === s.x2) return `M${x1} ${y1}V${y2}`;
+  const ym = (y1 + y2) / 2;
+  return `M${x1} ${y1}C${x1} ${ym} ${x2} ${ym} ${x2} ${y2}`;
+}
 
 export function computeGraph(commits: GitCommit[]): GraphRow[] {
   // lanes[j] = id of the commit lane j is waiting for (null = free slot)

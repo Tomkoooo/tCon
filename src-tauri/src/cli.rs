@@ -116,7 +116,10 @@ pub enum GitOp {
     Pull,
     Fetch,
     Checkout { branch: String },
-    CreateBranch { name: String },
+    /// `from`: start point (a commit id); None = HEAD.
+    CreateBranch { name: String, #[serde(default)] from: Option<String> },
+    /// Check out a commit (detached HEAD).
+    CheckoutDetached { commit: String },
     Stash,
     StashPop,
 }
@@ -127,6 +130,12 @@ fn current_branch(cwd: &str) -> Result<String, String> {
 
 fn has_upstream(cwd: &str) -> bool {
     git(cwd, &["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]).is_ok()
+}
+
+/// A hex commit id (so user input can't be read as an option or revspec).
+fn commit_id(rev: &str) -> Result<&str, String> {
+    let r = rev.trim();
+    if (4..=40).contains(&r.len()) && r.bytes().all(|b| b.is_ascii_hexdigit()) { Ok(r) } else { Err(format!("Not a commit id: {rev}")) }
 }
 
 fn git_op_sync(cwd: &str, op: GitOp) -> Result<String, String> {
@@ -192,7 +201,17 @@ fn git_op_sync(cwd: &str, op: GitOp) -> Result<String, String> {
             }
             git(cwd, &["switch", &branch])
         }
-        GitOp::CreateBranch { name } => git(cwd, &["switch", "-c", name.trim()]),
+        GitOp::CreateBranch { name, from } => {
+            let name = name.trim();
+            if name.is_empty() || name.starts_with('-') {
+                return Err(format!("Invalid branch name: {name}"));
+            }
+            match from {
+                Some(rev) => git(cwd, &["switch", "-c", name, commit_id(&rev)?]),
+                None => git(cwd, &["switch", "-c", name]),
+            }
+        }
+        GitOp::CheckoutDetached { commit } => git(cwd, &["switch", "--detach", commit_id(&commit)?]),
         GitOp::Stash => git(cwd, &["stash", "push", "-u"]),
         GitOp::StashPop => git(cwd, &["stash", "pop"]),
     }
@@ -366,7 +385,7 @@ mod tests {
         assert!(!work.join("new.txt").exists());
 
         // branches + stash
-        op(w, GitOp::CreateBranch { name: "feat".into() }).unwrap();
+        op(w, GitOp::CreateBranch { name: "feat".into(), from: None }).unwrap();
         assert_eq!(current_branch(w).unwrap(), "feat");
         std::fs::write(work.join("a.txt"), "wip").unwrap();
         op(w, GitOp::Stash).unwrap();
@@ -381,12 +400,21 @@ mod tests {
         op(w, GitOp::Pull).unwrap();
 
         // remote branch checkout creates a tracking branch
-        op(w, GitOp::CreateBranch { name: "other".into() }).unwrap();
+        op(w, GitOp::CreateBranch { name: "other".into(), from: None }).unwrap();
         op(w, GitOp::Push).unwrap();
         op(w, GitOp::Checkout { branch: "main".into() }).unwrap();
         git(w, &["branch", "-D", "other"]).unwrap();
         op(w, GitOp::Checkout { branch: "origin/other".into() }).unwrap();
         assert_eq!(current_branch(w).unwrap(), "other");
+
+        // branch at a commit, detached checkout; option-like input is refused
+        let first = git(w, &["rev-list", "--max-parents=0", "HEAD"]).unwrap().trim().to_string();
+        op(w, GitOp::CreateBranch { name: "at-first".into(), from: Some(first[..8].into()) }).unwrap();
+        assert_eq!(git(w, &["rev-parse", "HEAD"]).unwrap().trim(), first);
+        op(w, GitOp::CheckoutDetached { commit: first.clone() }).unwrap();
+        assert!(current_branch(w).is_err());
+        assert!(op(w, GitOp::CheckoutDetached { commit: "--orphan".into() }).is_err());
+        assert!(op(w, GitOp::CreateBranch { name: "-x".into(), from: None }).is_err());
 
         std::fs::remove_dir_all(&tmp).ok();
     }

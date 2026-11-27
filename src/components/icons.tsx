@@ -37,6 +37,12 @@ const P = {
   external: <><path d="M9.5 2.5h4v4M13.5 2.5L8 8" /><path d="M12 9.5V13a.5.5 0 0 1-.5.5h-8A.5.5 0 0 1 3 13V5a.5.5 0 0 1 .5-.5H7" /></>,
   inspect: <path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5" />,
   copy: <><rect x="5.5" y="5.5" width="8" height="8" rx="1.5" /><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2" /></>,
+  target: <><circle cx="8" cy="8" r="5.5" /><circle cx="8" cy="8" r="2.5" /></>,
+  cloud: <path d="M4.5 12.5h7a2.75 2.75 0 0 0 .4-5.47A4 4 0 0 0 4.2 7.6 2.5 2.5 0 0 0 4.5 12.5z" />,
+  tag: <><path d="M2.5 3.5v4l6 6 5-5-6-6h-4a1 1 0 0 0-1 1z" /><circle cx="5.5" cy="5.5" r="1" /></>,
+  fetch: <path d="M8 2.5v7.5M4.5 6.5L8 10l3.5-3.5M3 13.5h10" />,
+  help: <><circle cx="8" cy="8" r="6" /><path d="M6.2 6.3a1.9 1.9 0 0 1 3.7.5c0 1.3-1.9 1.6-1.9 2.7" /><circle cx="8" cy="11.4" r=".35" /></>,
+  history: <><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v3h3" /><path d="M8 5v3l2 1.5" /></>,
 } as const;
 
 /** Filled glyphs (rendered with fill instead of stroke). */

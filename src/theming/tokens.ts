@@ -103,6 +103,13 @@ export const TOKENS: TokenSpec[] = [
   { name: "sync-out", keys: [], fallback: "#e8a33d" },
   { name: "sync-in", keys: [], fallback: "#4fb5e8" },
   { name: "sync-local", keys: [], fallback: "#b884f0" },
+  // commit graph lanes (VS Code's scmGraph.* colors)
+  { name: "graph-1", keys: ["scmGraph.historyItemRefColor"], fallback: byKind("#59a4f9", "#1a85ff") },
+  { name: "graph-2", keys: ["scmGraph.foreground1"], fallback: byKind("#ffb000", "#b07800") },
+  { name: "graph-3", keys: ["scmGraph.foreground2"], fallback: byKind("#dc267f", "#c4166c") },
+  { name: "graph-4", keys: ["scmGraph.foreground3"], fallback: byKind("#3fb950", "#1a7f37") },
+  { name: "graph-5", keys: ["scmGraph.foreground5"], fallback: byKind("#b66dff", "#8250df") },
+  { name: "graph-6", keys: ["scmGraph.foreground4"], fallback: byKind("#40b0a6", "#1b7c83") },
   { name: "claude", keys: [], fallback: "#d97757" },
 
   // ---- editor ----

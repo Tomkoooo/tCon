@@ -123,7 +123,10 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::
     )?;
     let view = Submenu::with_items(app, "View", true, &[&P::fullscreen(app, None)?])?;
     let window = Submenu::with_items(app, "Window", true, &[&P::minimize(app, None)?, &P::maximize(app, None)?])?;
-    Menu::with_items(app, &[&app_menu, &edit, &view, &window])
+    // Custom items carry a frontend command id; on_menu_event forwards it as "menu-command".
+    let help_item = tauri::menu::MenuItem::with_id(app, "tcon.help", "tCon Help", true, None::<&str>)?;
+    let help = Submenu::with_items(app, "Help", true, &[&help_item])?;
+    Menu::with_items(app, &[&app_menu, &edit, &view, &window, &help])
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -157,6 +160,11 @@ pub fn run() {
             app.manage(Db::open(&dir)?);
             app.set_menu(build_menu(app.handle())?)?;
             background::setup(app.handle())?;
+            app.on_menu_event(|app, ev| {
+                if ev.id().as_ref() == "tcon.help" {
+                    let _ = tauri::Emitter::emit(app, "menu-command", "tcon.help");
+                }
+            });
             Ok(())
         })
         // Closing the main window hides it while background mode is on.
@@ -192,6 +200,8 @@ pub fn run() {
             git::git_branches,
             git::git_worktrees,
             git::git_diff,
+            git::git_commit_details,
+            git::git_commit_diff,
             cli::git_op,
             cli::claude_auth_status,
             cli::claude_auth_logout,

@@ -1,0 +1,65 @@
+/* Help page (editor tab kind "help"). Prefixed help-. */
+.help-root { display: flex; height: 100%; min-height: 0; background: var(--editor-bg, var(--bg)); color: var(--editor-fg, var(--fg)); font-size: var(--fs-m); }
+
+.help-toc {
+  flex: none; width: 200px; display: flex; flex-direction: column; gap: 1px; padding: var(--sp-4) var(--sp-2);
+  border-right: 1px solid var(--border); overflow: auto;
+}
+.help-toc-title { padding: 0 var(--sp-2) var(--sp-2); font-size: var(--fs-xs); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--fg-dim); }
+.help-toc-item {
+  text-align: left; padding: 3px var(--sp-2); border: none; border-radius: var(--radius); background: none; color: var(--fg-dim); cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.help-toc-item:hover:not(:disabled) { background: var(--bg-3); color: var(--fg); }
+.help-toc-item.on { background: var(--list-active-bg, var(--bg-3)); color: var(--list-active-fg, var(--fg)); }
+.help-toc-item.dim { opacity: .4; cursor: default; }
+
+.help-main { flex: 1; min-width: 0; overflow: auto; position: relative; user-select: text; -webkit-user-select: text; }
+.help-search {
+  position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-6); background: var(--editor-bg, var(--bg)); border-bottom: 1px solid var(--border); color: var(--fg-dim);
+}
+.help-search input { flex: 1; max-width: 560px; }
+.help-content { max-width: 820px; padding: var(--sp-2) var(--sp-6) 80px; }
+.help-empty { color: var(--fg-dim); }
+
+.help-section { padding-top: var(--sp-5); }
+.help-section h2 { margin: 0 0 var(--sp-2); font-size: 18px; font-weight: 600; }
+.help-intro { margin: 0 0 var(--sp-3); color: var(--fg-dim); }
+
+.help-items { margin: 0; display: flex; flex-direction: column; }
+.help-item { display: grid; grid-template-columns: minmax(150px, 220px) 1fr; gap: var(--sp-1) var(--sp-4); padding: var(--sp-2) 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
+.help-item dt { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); font-weight: 600; }
+.help-item dt > span { margin-right: var(--sp-1); }
+.help-item dd { margin: 0; color: var(--fg); display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-2); }
+.help-item dd > span { flex: 1 1 280px; color: color-mix(in srgb, var(--fg) 85%, var(--fg-dim)); }
+@media (max-width: 760px) { .help-item { grid-template-columns: 1fr; } }
+
+.help-kbd {
+  display: inline-block; min-width: 18px; padding: 0 5px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: var(--radius-s);
+  background: var(--bg-2); color: var(--fg); font: 500 var(--fs-xs)/16px var(--font-ui); text-align: center; white-space: nowrap;
+}
+
+.help-action, .help-link {
+  display: inline-flex; align-items: center; gap: var(--sp-1); height: 22px; padding: 0 var(--sp-2); border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--bg-2); color: var(--fg); cursor: pointer; font-size: var(--fs-s); white-space: nowrap;
+}
+.help-action:hover, .help-link:hover { border-color: var(--accent); color: var(--accent); }
+.help-link { margin-left: var(--sp-2); border: none; background: none; color: var(--link-fg, var(--accent)); padding: 0 var(--sp-1); }
+.help-link:hover { text-decoration: underline; }
+
+.help-keys { width: 100%; border-collapse: collapse; }
+.help-keys td { padding: 5px var(--sp-2) 5px 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); vertical-align: middle; }
+.help-keys-title { width: 55%; }
+.help-cmd { display: block; color: var(--fg-dim); font: var(--fs-xs) var(--font-mono); }
+.help-keys-keys { white-space: nowrap; }
+.help-key-combo { display: inline-flex; align-items: center; gap: var(--sp-1); margin-right: var(--sp-2); }
+.help-when { color: var(--fg-dim); font: var(--fs-xs) var(--font-mono); }
+.help-dim { color: var(--fg-dim); font-size: var(--fs-s); }
+.help-keys-run { width: 28px; text-align: right; }
+.help-run {
+  width: 22px; height: 22px; padding: 0; border: none; border-radius: var(--radius); background: none; color: var(--fg-dim); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; opacity: 0;
+}
+.help-keys tr:hover .help-run, .help-run:focus-visible { opacity: 1; }
+.help-run:hover { background: var(--bg-3); color: var(--fg); }

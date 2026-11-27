@@ -11,6 +11,8 @@ import { BoardView } from "../tasks/BoardView";
 import { Icon } from "../icons";
 import { BrowserTab, BrowserTabIcon, BrowserTabName } from "../browser/BrowserTab";
 import { hostOf } from "../../browser/api";
+import { HelpView } from "../help/HelpView";
+import { CommitView, commitIdOf } from "../editor/CommitView";
 
 const DRAG_TYPE = "text/tcon-editor-tab";
 const baseName = (p: string) => p.slice(p.lastIndexOf("/") + 1);
@@ -98,7 +100,7 @@ function EditorGroupView({ project, group, canSplit }: { project: Project; group
         {group.tabs.map((t) => (
           // All tabs stay mounted so unsaved buffers survive tab switches.
           <div key={t.id} className="ed-tab-body" style={{ display: t.id === group.activeTabId ? undefined : "none" }}>
-            {t.kind === "board" ? <BoardView project={project} /> : t.kind === "browser" ? <BrowserTab project={project} tab={t} /> : <EditorPane tabId={t.id} path={t.path} root={project.rootPath} diff={t.diff} />}
+            {t.kind === "board" ? <BoardView project={project} /> : t.kind === "browser" ? <BrowserTab project={project} tab={t} /> : t.kind === "help" ? <HelpView /> : t.kind === "commit" ? <CommitView root={project.rootPath} path={t.path} /> : <EditorPane tabId={t.id} path={t.path} root={project.rootPath} diff={t.diff} />}
           </div>
         ))}
         {drop && <div className={`ed-drop-overlay ${drop}`} />}
@@ -113,7 +115,7 @@ function EditorTabButton({ project, group, tab, index }: { project: Project; gro
   const menu = useContextMenu();
   const [dragOver, setDragOver] = useState(false);
   const active = tab.id === group.activeTabId;
-  const name = tab.kind === "board" ? "Tasks" : tab.kind === "browser" ? hostOf(tab.path) : tab.diff && !tab.diff.file ? "Changes" : baseName(tab.path);
+  const name = tab.kind === "board" ? "Tasks" : tab.kind === "browser" ? hostOf(tab.path) : tab.kind === "help" ? "Help" : tab.kind === "commit" ? commitIdOf(tab.path).slice(0, 7) : tab.diff && !tab.diff.file ? "Changes" : baseName(tab.path);
   const rel = tab.path.startsWith(project.rootPath + "/") ? tab.path.slice(project.rootPath.length + 1) : tab.path;
   // Disambiguate same-named files with their parent folder (VS Code style).
   const dupe = group.tabs.some((t) => t.id !== tab.id && baseName(t.path) === baseName(tab.path));
@@ -166,11 +168,16 @@ function EditorTabButton({ project, group, tab, index }: { project: Project; gro
           <Icon name="board" size={14} className="ed-tab-icon" />
         ) : tab.kind === "browser" ? (
           <BrowserTabIcon tabId={tab.id} />
+        ) : tab.kind === "help" ? (
+          <Icon name="help" size={14} className="ed-tab-icon" />
+        ) : tab.kind === "commit" ? (
+          <Icon name="commit" size={14} className="ed-tab-icon" />
         ) : (
           <FileIcon name={baseName(tab.path) || name} />
         )}
         <span className="ed-tab-name">{tab.kind === "browser" ? <BrowserTabName tab={tab} /> : name}</span>
         {tab.diff && <span className="ed-tab-desc">{tab.diff.staged ? "staged" : "diff"}</span>}
+        {tab.kind === "commit" && <span className="ed-tab-desc">commit</span>}
         {!tab.diff && !tab.kind && dupe && parent && <span className="ed-tab-desc">{parent}</span>}
         <button className="ed-tab-close" title="Close (⌘W)" aria-label={`Close ${name}`} onMouseDown={(e) => e.stopPropagation()} onClick={close}>
           <Icon name="close" size={14} className="x" />

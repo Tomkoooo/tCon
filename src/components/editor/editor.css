@@ -162,3 +162,15 @@
 .ed-diff-del { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
 .ed-diff-hunk { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .ed-diff-meta { color: var(--fg-dim); font-weight: 600; }
+
+/* ---------- commit tab (CommitView) ---------- */
+.commit-view { flex: 1; min-height: 0; overflow: auto; user-select: text; -webkit-user-select: text; }
+.commit-view .ed-diff { flex: none; overflow: visible; min-height: auto; }
+.commit-view-meta { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; padding: var(--sp-4) var(--sp-4) 0; }
+.commit-view-meta .sb-avatar {
+  flex: none; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  color: #fff; font-size: var(--fs-s); font-weight: 600;
+}
+.commit-view-subject { padding: var(--sp-3) var(--sp-4) 0; font-size: var(--fs-l); font-weight: 600; white-space: pre-wrap; word-break: break-word; }
+.commit-view-body { padding: var(--sp-2) var(--sp-4) 0; white-space: pre-wrap; word-break: break-word; color: var(--fg); }
+.commit-view-stats { padding: var(--sp-3) var(--sp-4) var(--sp-2); font-size: var(--fs-s); border-bottom: 1px solid var(--border); }
