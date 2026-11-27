@@ -69,9 +69,48 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
+  # One draft release for all build jobs. Letting each tauri-action job create the release
+  # races: parallel jobs each created their own draft and split the assets between them.
+  prepare:
+    name: Create the draft release
+    needs: check
+    if: needs.check.outputs.exists == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create (or reuse) the draft release
+    outputs:
+      release_id: ${{ steps.r.outputs.id }}
+    steps:
+      - id: r
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.check.outputs.version }}
+          PRERELEASE: ${{ needs.check.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          # Reuse a draft left by an earlier failed run; delete duplicate drafts for the same tag.
+          ids=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.draft and .tag_name == \"$tag\") | .id")
+          id=$(printf '%s\n' "$ids" | sed -n 1p)
+          for extra in $(printf '%s\n' "$ids" | sed -n '2,$p'); do
+            echo "Deleting duplicate draft $extra"
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$extra"
+          done
+          if [ -z "$id" ]; then
+            id=$(gh api -X POST "repos/$GITHUB_REPOSITORY/releases" \
+              -f tag_name="$tag" -f target_commitish="$GITHUB_SHA" -f name="tCon $tag" \
+              -f body="Release notes are added when all builds finish." \
+              -F draft=true -F prerelease="$PRERELEASE" --jq .id)
+            echo "Created draft $id"
+          else
+            echo "Reusing draft $id"
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build (${{ matrix.name }})
-    needs: check
+    needs: [check, prepare]
     if: needs.check.outputs.exists == 'false'
     permissions:
       contents: write # create the draft release and upload the installers
@@ -169,17 +208,13 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: v__VERSION__
-          releaseName: tCon v__VERSION__
-          releaseBody: Release notes are added when all builds finish.
-          releaseDraft: true
-          prerelease: ${{ needs.check.outputs.prerelease == 'true' }}
+          releaseId: ${{ needs.prepare.outputs.release_id }}
           includeUpdaterJson: false
           args: ${{ matrix.args }}
 
   publish:
     name: Publish release + updater manifest
-    needs: [check, build]
+    needs: [check, prepare, build]
     if: needs.check.outputs.exists == 'false'
     runs-on: ubuntu-latest
     permissions:

@@ -388,10 +388,18 @@ mod tests {
         fs::write(d.join("x.txt"), "1").unwrap();
         fs::create_dir(d.join("node_modules")).unwrap();
         fs::write(d.join("node_modules/y.js"), "1").unwrap();
-        let ev = rx.recv_timeout(Duration::from_secs(5)).expect("no fs-changed event");
-        assert_eq!(ev.root, normalize_root(d.to_str().unwrap()));
-        assert!(ev.paths.iter().any(|p| p.ends_with("x.txt")), "{ev:?}");
-        assert!(!ev.paths.iter().any(|p| p.contains("node_modules/")), "{ev:?}");
+        // Events can be split across debounce batches (and inotify may report the directory
+        // creation first), so collect batches until x.txt shows up or a full rescan is requested.
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        let (mut saw_x, mut rescan) = (false, false);
+        while !saw_x && !rescan {
+            let left = deadline.saturating_duration_since(std::time::Instant::now());
+            let ev = rx.recv_timeout(left).expect("no fs-changed event with x.txt");
+            assert_eq!(ev.root, normalize_root(d.to_str().unwrap()));
+            assert!(!ev.paths.iter().any(|p| p.contains("node_modules/")), "{ev:?}");
+            saw_x = ev.paths.iter().any(|p| p.ends_with("x.txt"));
+            rescan = ev.paths.is_empty();
+        }
         w.unwatch(d.to_str().unwrap());
         assert!(!w.inner.lock().is_empty());
         w.unwatch(d.to_str().unwrap());
