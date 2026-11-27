@@ -5,6 +5,7 @@ import { MODEL_SETTING, modelLabel, normalizeModel } from "../claudeModel";
 import { Modal } from "./Modal";
 import { ModelPicker } from "./ProfilesModal";
 import { ColorPicker, Field, Segmented } from "./ui";
+import { Icon } from "./icons";
 
 export function envToText(env: Record<string, string> | null | undefined) {
   return Object.entries(env ?? {}).map(([k, v]) => `${k}=${v}`).join("\n");
@@ -41,7 +42,7 @@ export function ProjectSettingsModal({ projectId }: { projectId: string }) {
   const save = () => {
     const env = textToEnv(envText);
     if (Object.keys(env).some((k) => SECRET_RE.test(k))) {
-      return setError("Don't put API keys or tokens here: they'd be stored unencrypted. Use Settings → Accounts to sign in instead.");
+      return setError("API keys and tokens would be stored unencrypted here. Sign in under Settings → Accounts instead.");
     }
     update(projectId, {
       name: name.trim() || project.name,
@@ -61,8 +62,8 @@ export function ProjectSettingsModal({ projectId }: { projectId: string }) {
           <Field label="Name" grow>
             <input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
-          <Field label="Tab badge" hint="Short label on the tab, e.g. “client”." grow>
-            <input placeholder="none" value={label} onChange={(e) => setLabel(e.target.value)} />
+          <Field label="Tab badge" hint="Short label shown on the tab." grow>
+            <input placeholder="e.g. client" value={label} onChange={(e) => setLabel(e.target.value)} />
           </Field>
         </div>
         <Field label="Color">
@@ -87,8 +88,8 @@ export function ProjectSettingsModal({ projectId }: { projectId: string }) {
         </Field>
 
         <details className="advanced" open={!!project.env || !!profile}>
-          <summary>Advanced: extra environment variables</summary>
-          <Field label="Environment" hint="KEY=value per line. Applied to every new terminal in this project, on top of the active Claude account.">
+          <summary><Icon name="chevronRight" size={14} />Environment variables</summary>
+          <Field label="Environment" hint="KEY=value per line. Added to every new terminal in this project.">
             <textarea
               rows={4}
               className="mono"
@@ -123,7 +124,7 @@ export function ProjectSettingsModal({ projectId }: { projectId: string }) {
         {error && <div className="settings-error">{error}</div>}
       </div>
       <div className="modal-foot">
-        <span className="hint">Applies to new terminals and sessions · ⌘↵ to save</span>
+        <span className="hint">Applies to new terminals · ⌘↵ to save</span>
         <span className="spacer" />
         <button className="btn ghost" onClick={() => setModal(null)}>Cancel</button>
         <button className="btn primary" onClick={save}>Save</button>

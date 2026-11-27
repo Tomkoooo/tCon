@@ -12,6 +12,7 @@ import type { GraphRow } from "./graphLayout";
 import { baseName, decorFor, parentDir, trimSlash } from "./gitDecor";
 import "./sidebar.css";
 import { FileIcon } from "../FileIcon";
+import { Icon } from "../icons";
 
 export interface GitPanelProps {
   root: string;
@@ -19,23 +20,6 @@ export interface GitPanelProps {
   onOpenDiff?(file: string | null, staged: boolean): void;
   onOpenFile?(path: string): void;
 }
-
-/* small inline icons for row/section actions */
-const I = {
-  plus: <path d="M8 3.5v9M3.5 8h9" />,
-  minus: <path d="M3.5 8h9" />,
-  discard: <path d="M3 7h7a3 3 0 0 1 0 6H7M3 7l3-3M3 7l3 3" />,
-  open: <><path d="M9 2.5H4a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V6.5z" /><path d="M9 2.5v4h4" /></>,
-  fetch: <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2v3h-3" />,
-  pull: <path d="M8 2.5v10M4 8.5l4 4 4-4" />,
-  push: <path d="M8 13.5v-10M4 7.5l4-4 4 4" />,
-  check: <path d="M3 8.5l3 3 7-7" />,
-  chevron: <path d="M4 6l4 4 4-4" />,
-  branch: <><circle cx="4.5" cy="3.5" r="1.7" /><circle cx="4.5" cy="12.5" r="1.7" /><circle cx="11.5" cy="5.5" r="1.7" /><path d="M4.5 5.2v5.6M11.5 7.2c0 3-7 2-7 3.6" /></>,
-};
-const Icon = ({ i, size = 14 }: { i: keyof typeof I; size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">{I[i]}</svg>
-);
 
 interface RowActions {
   stage(f: GitFileStatus): void;
@@ -63,10 +47,8 @@ function Section(props: {
 }) {
   return (
     <div className={`sb-section${props.open ? " sb-section-open" : ""}${props.grow && props.open ? " sb-section-grow" : ""}`}>
-      <div className="sb-section-header" onClick={() => props.onToggle(props.id)}>
-        <svg width="10" height="10" viewBox="0 0 10 10" className={`sb-chevron${props.open ? " sb-open" : ""}`}>
-          <path d="M3 1.5L7 5L3 8.5" fill="none" stroke="currentColor" strokeWidth="1.3" />
-        </svg>
+      <div className="sb-section-header" role="button" tabIndex={0} aria-expanded={props.open} onClick={() => props.onToggle(props.id)} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), props.onToggle(props.id))}>
+        <Icon name="chevronRight" size={14} className={`sb-chevron${props.open ? " sb-open" : ""}`} />
         <span className="sb-section-title">{props.title}</span>
         {props.count !== undefined && <span className="sb-count">{props.count}</span>}
         <span className="sb-spacer" />
@@ -176,15 +158,15 @@ function ChangeRow({ file, staged, onOpenDiff, actions, busy }: {
       <span className="sb-spacer" />
       <span className="sb-row-actions">
         {actions.open && !deleted && (
-          <button className="sb-icon-btn" title="Open file" onClick={stop(() => actions.open!(file))}><Icon i="open" /></button>
+          <button className="sb-icon-btn" title="Open file" onClick={stop(() => actions.open!(file))}><Icon name="file" /></button>
         )}
         {!staged && (
-          <button className="sb-icon-btn" title="Discard changes" onClick={stop(() => actions.discard(file))}><Icon i="discard" /></button>
+          <button className="sb-icon-btn" title="Discard changes" onClick={stop(() => actions.discard(file))}><Icon name="discard" /></button>
         )}
         {staged ? (
-          <button className="sb-icon-btn" title="Unstage" onClick={stop(() => actions.unstage(file))}><Icon i="minus" /></button>
+          <button className="sb-icon-btn" title="Unstage" onClick={stop(() => actions.unstage(file))}><Icon name="minus" /></button>
         ) : (
-          <button className="sb-icon-btn" title="Stage" onClick={stop(() => actions.stage(file))}><Icon i="plus" /></button>
+          <button className="sb-icon-btn" title="Stage" onClick={stop(() => actions.stage(file))}><Icon name="plus" /></button>
         )}
       </span>
       <span className="sb-badge">{d.letter}</span>
@@ -326,14 +308,14 @@ export function GitPanel({ root: rawRoot, gitStatus, onOpenDiff, onOpenFile }: G
   };
 
   const branchMenu = (e: React.MouseEvent) => {
-    const items: MenuItem[] = [{ label: "Create New Branch…", action: () => setNewBranch("") }, "sep"];
+    const items: MenuItem[] = [{ label: "Create New Branch…", checked: false, action: () => setNewBranch("") }, "sep"];
     for (const b of branches.filter((x) => !x.isRemote)) {
-      items.push({ label: `${b.isHead ? "✓" : "\u2003"} ${b.name}`, action: () => !b.isHead && void run("Switching…", { op: "checkout", branch: b.name }) });
+      items.push({ label: b.name, checked: b.isHead, action: () => !b.isHead && void run("Switching…", { op: "checkout", branch: b.name }) });
     }
     const remotes = branches.filter((x) => x.isRemote && !x.name.endsWith("/HEAD") && !branches.some((l) => !l.isRemote && x.name.endsWith(`/${l.name}`)));
     if (remotes.length) {
       items.push("sep");
-      for (const b of remotes.slice(0, 15)) items.push({ label: `\u2003 ${b.name}`, hint: "remote", action: () => void run("Switching…", { op: "checkout", branch: b.name }) });
+      for (const b of remotes.slice(0, 15)) items.push({ label: b.name, checked: false, hint: "remote", action: () => void run("Switching…", { op: "checkout", branch: b.name }) });
     }
     items.push("sep", { label: "Stash All Changes", action: () => void run("Stashing…", { op: "stash" }, "Changes stashed.") });
     if (gitStatus?.stashCount) items.push({ label: `Pop Stash (${gitStatus.stashCount})`, action: () => void run("Applying stash…", { op: "stashPop" }) });
@@ -355,27 +337,27 @@ export function GitPanel({ root: rawRoot, gitStatus, onOpenDiff, onOpenFile }: G
     <div className="sb-git">
       <div className="sb-git-head">
         <button className="sb-branch-btn" title="Switch branch" onClick={branchMenu} disabled={!!busy}>
-          <Icon i="branch" />
+          <Icon name="branch" />
           <span className="sb-branch">{gitStatus?.branch ?? (gitStatus ? "(detached)" : "…")}</span>
-          <Icon i="chevron" size={10} />
+          <Icon name="chevronDown" size={12} />
         </button>
         <span className="sb-spacer" />
         {gitStatus?.hasRemote && (
           <>
-            <button className="sb-icon-btn" title="Fetch" disabled={!!busy} onClick={() => void run("Fetching…", { op: "fetch" }, "Fetched.")}>
-              <Icon i="fetch" />
+            <button className="sb-icon-btn" title="Fetch" aria-label="Fetch" disabled={!!busy} onClick={() => void run("Fetching…", { op: "fetch" }, "Fetched.")}>
+              <Icon name="refresh" />
             </button>
             <button className="sb-sync-btn" title={gitStatus.upstream ? `Pull from ${gitStatus.upstream}` : "No upstream branch"} disabled={!!busy || !gitStatus.upstream} onClick={() => void run("Pulling…", { op: "pull" }, "Pulled.")}>
-              <Icon i="pull" />{gitStatus.behind > 0 && <span>{gitStatus.behind}</span>}
+              <Icon name="arrowDown" size={14} />{gitStatus.behind > 0 && <span>{gitStatus.behind}</span>}
             </button>
             {gitStatus.upstream ? (
               <button className={`sb-sync-btn${gitStatus.ahead > 0 ? " sb-sync-hot" : ""}`} title={`Push to ${gitStatus.upstream}`} disabled={!!busy} onClick={() => void run("Pushing…", { op: "push" }, "Pushed.")}>
-                <Icon i="push" />{gitStatus.ahead > 0 && <span>{gitStatus.ahead}</span>}
+                <Icon name="arrowUp" size={14} />{gitStatus.ahead > 0 && <span>{gitStatus.ahead}</span>}
               </button>
             ) : (
               gitStatus.branch && (
-                <button className="sb-sync-btn sb-sync-hot" title="Publish this branch to the remote" disabled={!!busy} onClick={() => void run("Publishing…", { op: "push" }, "Branch published.")}>
-                  <Icon i="push" /><span>Publish</span>
+                <button className="sb-sync-btn sb-sync-hot" title="Publish branch" disabled={!!busy} onClick={() => void run("Publishing…", { op: "push" }, "Branch published.")}>
+                  <Icon name="arrowUp" size={14} /><span>Publish</span>
                 </button>
               )
             )}
@@ -406,7 +388,7 @@ export function GitPanel({ root: rawRoot, gitStatus, onOpenDiff, onOpenFile }: G
       <div className="sb-git-form">
         <textarea
           className="sb-commit-msg"
-          placeholder={`Message (⌘↵ to commit on "${gitStatus?.branch ?? "HEAD"}")`}
+          placeholder={`Message (⌘↵ to commit on ${gitStatus?.branch ?? "HEAD"})`}
           value={message}
           rows={Math.min(6, Math.max(2, message.split("\n").length))}
           onChange={(e) => setMessage(e.target.value)}
@@ -419,10 +401,10 @@ export function GitPanel({ root: rawRoot, gitStatus, onOpenDiff, onOpenFile }: G
         />
         <div className="sb-commit-row">
           <button className="sb-commit-btn" disabled={!!busy || !files.length || !message.trim()} onClick={() => void commit()}>
-            <Icon i="check" /> {busy ?? (staged.length || !files.length ? "Commit" : "Commit All")}
+            <Icon name="check" size={14} /> {busy ?? (staged.length || !files.length ? "Commit" : "Commit All")}
           </button>
-          <button className="sb-commit-more" title="More commit actions" disabled={!!busy} onClick={commitMenu}>
-            <Icon i="chevron" size={12} />
+          <button className="sb-commit-more" title="More commit actions" aria-label="More commit actions" disabled={!!busy} onClick={commitMenu}>
+            <Icon name="chevronDown" size={14} />
           </button>
         </div>
       </div>
@@ -430,7 +412,7 @@ export function GitPanel({ root: rawRoot, gitStatus, onOpenDiff, onOpenFile }: G
       {opError && (
         <div className="sb-git-banner sb-git-banner-error" title={opError}>
           <span>{opError}</span>
-          <button className="sb-icon-btn" onClick={() => setOpError(null)}>×</button>
+          <button className="sb-icon-btn" aria-label="Dismiss" onClick={() => setOpError(null)}><Icon name="close" size={14} /></button>
         </div>
       )}
       {opInfo && !opError && (
@@ -445,21 +427,19 @@ export function GitPanel({ root: rawRoot, gitStatus, onOpenDiff, onOpenFile }: G
           open={open.changes}
           onToggle={toggle}
           actions={onOpenDiff && files.length > 0 ? (
-            <button className="sb-icon-btn" title="Open full working-tree diff" onClick={() => onOpenDiff(null, false)}>
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-                <path d="M8 2v6M5 5h6M5 12h6" />
-              </svg>
+            <button className="sb-icon-btn" title="Open working tree diff" aria-label="Open working tree diff" onClick={() => onOpenDiff(null, false)}>
+              <Icon name="diff" />
             </button>
           ) : undefined}
         >
           {files.length === 0 && <div className="sb-empty">No changes.</div>}
           {staged.length > 0 && (
             <>
-              <div className="sb-subheader sb-change" onClick={() => onOpenDiff?.(null, true)} title="Open staged diff">
+              <div className="sb-subheader sb-change" onClick={() => onOpenDiff?.(null, true)} title="Open staged diff" role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onOpenDiff?.(null, true)}>
                 Staged <span className="sb-count">{staged.length}</span>
                 <span className="sb-spacer" />
                 <span className="sb-row-actions">
-                  <button className="sb-icon-btn" title="Unstage all" onClick={(e) => { e.stopPropagation(); void run("Unstaging…", { op: "unstageAll" }); }}><Icon i="minus" /></button>
+                  <button className="sb-icon-btn" title="Unstage all" onClick={(e) => { e.stopPropagation(); void run("Unstaging…", { op: "unstageAll" }); }}><Icon name="minus" /></button>
                 </span>
               </div>
               {staged.map((f) => <ChangeRow key={`s:${f.path}`} file={f} staged onOpenDiff={onOpenDiff} actions={rowActions} busy={!!busy} />)}
@@ -467,12 +447,12 @@ export function GitPanel({ root: rawRoot, gitStatus, onOpenDiff, onOpenFile }: G
           )}
           {changes.length > 0 && (
             <>
-              <div className="sb-subheader sb-change" onClick={() => onOpenDiff?.(null, false)} title="Open working-tree diff">
+              <div className="sb-subheader sb-change" onClick={() => onOpenDiff?.(null, false)} title="Open working tree diff" role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onOpenDiff?.(null, false)}>
                 Changes <span className="sb-count">{changes.length}</span>
                 <span className="sb-spacer" />
                 <span className="sb-row-actions">
-                  <button className="sb-icon-btn" title="Discard all changes" onClick={(e) => { e.stopPropagation(); void discard(changes); }}><Icon i="discard" /></button>
-                  <button className="sb-icon-btn" title="Stage all" onClick={(e) => { e.stopPropagation(); void run("Staging…", { op: "stageAll" }); }}><Icon i="plus" /></button>
+                  <button className="sb-icon-btn" title="Discard all changes" onClick={(e) => { e.stopPropagation(); void discard(changes); }}><Icon name="discard" /></button>
+                  <button className="sb-icon-btn" title="Stage all" onClick={(e) => { e.stopPropagation(); void run("Staging…", { op: "stageAll" }); }}><Icon name="plus" /></button>
                 </span>
               </div>
               {changes.map((f) => <ChangeRow key={`w:${f.path}`} file={f} staged={false} onOpenDiff={onOpenDiff} actions={rowActions} busy={!!busy} />)}
@@ -504,17 +484,15 @@ export function GitPanel({ root: rawRoot, gitStatus, onOpenDiff, onOpenFile }: G
               title={`${b.name} @ ${b.target.slice(0, 7)}${b.upstream ? ` → ${b.upstream}` : ""}${b.isHead ? "" : "\nDouble-click to switch"}`}
               onDoubleClick={() => !b.isHead && !busy && void run("Switching…", { op: "checkout", branch: b.name })}
             >
-              <span className="sb-head-mark">{b.isHead ? "●" : ""}</span>
+              <span className="sb-head-mark">{b.isHead && <Icon name="check" size={12} />}</span>
               <span className="sb-name">{b.name}</span>
               {b.upstream && <span className="sb-desc">{b.upstream}</span>}
             </div>
           ))}
           {remote.length > 0 && (
             <>
-              <div className="sb-subheader" onClick={() => setShowRemotes((v) => !v)}>
-                <svg width="10" height="10" viewBox="0 0 10 10" className={`sb-chevron${showRemotes ? " sb-open" : ""}`}>
-                  <path d="M3 1.5L7 5L3 8.5" fill="none" stroke="currentColor" strokeWidth="1.3" />
-                </svg>
+              <div className="sb-subheader" role="button" tabIndex={0} aria-expanded={showRemotes} onClick={() => setShowRemotes((v) => !v)} onKeyDown={(e) => e.key === "Enter" && setShowRemotes((v) => !v)}>
+                <Icon name="chevronRight" size={14} className={`sb-chevron${showRemotes ? " sb-open" : ""}`} />
                 Remote <span className="sb-count">{remote.length}</span>
               </div>
               {showRemotes && remote.map((b) => (
@@ -560,8 +538,8 @@ export function GitPanel({ root: rawRoot, gitStatus, onOpenDiff, onOpenFile }: G
                     ))}
                     <span className="sb-graph-summary">{c.summary}</span>
                   </span>
-                  {c.sync === "outgoing" && <span className="sb-sync-badge" title={SYNC_TITLE.outgoing}>↑</span>}
-                  {c.sync === "incoming" && <span className="sb-sync-badge" title={SYNC_TITLE.incoming}>↓</span>}
+                  {c.sync === "outgoing" && <span className="sb-sync-badge"><Icon name="arrowUp" size={12} title={SYNC_TITLE.outgoing} /></span>}
+                  {c.sync === "incoming" && <span className="sb-sync-badge"><Icon name="arrowDown" size={12} title={SYNC_TITLE.incoming} /></span>}
                 </div>
               );
             })}

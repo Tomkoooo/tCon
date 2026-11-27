@@ -43,7 +43,8 @@ export const TOKENS: TokenSpec[] = [
   { name: "fg", keys: ["foreground", "editor.foreground"], fallback: byKind("#cccccc", "#3b3b3b") },
   { name: "bg-2", keys: ["sideBar.background", "editorGroupHeader.tabsBackground", "panel.background"], fallback: mix("fg", 4, "bg") },
   { name: "bg-3", keys: ["list.hoverBackground", "toolbar.hoverBackground"], fallback: mix("fg", 9, "bg-2") },
-  { name: "fg-dim", keys: ["descriptionForeground", "tab.inactiveForeground"], fallback: mix("fg", 62, "bg") },
+  // 62% / 75% of fg keeps dim text above 4.5:1 (WCAG AA) on the sidebar and hover backgrounds.
+  { name: "fg-dim", keys: ["descriptionForeground", "tab.inactiveForeground"], fallback: (k) => (k === "dark" ? mix("fg", 62, "bg") : mix("fg", 75, "bg")) },
   { name: "border", keys: ["panel.border", "sideBar.border", "editorGroup.border", "contrastBorder"], fallback: mix("fg", 14, "bg") },
   { name: "accent", keys: ["focusBorder", "button.background", "activityBarBadge.background"], fallback: byKind("#3794ff", "#005fb8") },
   { name: "accent-fg", keys: ["button.foreground"], fallback: "#ffffff" },

@@ -137,10 +137,9 @@ export default function App() {
         ) : (
           loaded && (
             <div className="empty-state">
-              <div style={{ fontSize: 22, color: "var(--fg)" }}>tCon</div>
-              <div>Projects + terminals for parallel Claude Code sessions</div>
+              <div>No project open</div>
               <button className="btn primary" onClick={() => setModal({ kind: "newProject" })}>
-                Open a project <span className="kbd" style={{ marginLeft: 6 }}>⌘T</span>
+                Open project <span className="kbd">⌘T</span>
               </button>
             </div>
           )

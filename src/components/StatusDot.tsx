@@ -1,7 +1,7 @@
 import type { PaneStatus } from "../types";
 
 const LABEL: Record<string, string> = {
-  idle: "Idle — waiting for input",
+  idle: "Idle",
   working: "Working",
   blocked: "Needs you",
   done: "Done",

@@ -2,6 +2,9 @@
 import { useWorkspace } from "../../store/workspace";
 import { agentView, livePane, type AgentView } from "../../tasks/agent";
 import type { Task } from "../../tasks/types";
+import { ClaudeMark } from "../icons";
+
+export { ClaudeMark };
 
 export const TASK_DRAG = "text/tcon-task";
 
@@ -65,17 +68,6 @@ export function Spinner({ size = 11 }: { size?: number }) {
   );
 }
 
-export function ClaudeMark({ size = 12 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden className="tk-claude-mark">
-      <path
-        d="M8 1.2l1.2 4.1 4.1-1.9-2.6 3.6 4.1 1.2-4.3.6 2.3 3.7-3.6-2.4L8 14.8l-1.2-4.7-3.6 2.4 2.3-3.7-4.3-.6 4.1-1.2-2.6-3.6 4.1 1.9z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
-
 /** Live agent state of a task (file state + its pane's OSC status). */
 export function useAgentView(task: Task): AgentView {
   const pane = useWorkspace((s) => (task.paneId ? s.statuses[task.paneId] : undefined));
@@ -95,11 +87,12 @@ export function AgentChip({ task, compact }: { task: Task; compact?: boolean }) 
   );
 }
 
-/** Stable pastel-ish hue per label, tinted from theme tokens. */
+/** Stable hue per label, from theme tokens. */
 export function labelColor(label: string): string {
   let h = 0;
   for (const ch of label) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  const palette = ["var(--accent)", "var(--ok)", "var(--warn)", "var(--danger)", "var(--claude)", "var(--sync-in, var(--accent))", "var(--git-modified, var(--warn))"];
+  // No danger/warn hues: those mean state elsewhere on the board.
+  const palette = ["var(--accent)", "var(--ok)", "var(--claude)", "var(--sync-in, var(--accent))", "var(--sync-local, var(--accent))"];
   return palette[h % palette.length];
 }
 

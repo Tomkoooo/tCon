@@ -10,15 +10,14 @@ export function layoutMenuItems(projectId: string): MenuItem[] {
   const p = st.projects[projectId];
   if (!p) return [];
   const editors = hasEditors(p);
-  const check = (on: boolean, label: string) => `${on ? "✓" : " "} ${label}`;
   return [
     ...POSITIONS.map(([pos, label]): MenuItem => ({
-      label: check(p.panelPosition === pos, `Terminal Panel: ${label}`),
+      label: `Terminal Panel: ${label}`, checked: p.panelPosition === pos,
       action: () => st.setPanelPosition(projectId, pos),
     })),
     "sep",
-    { label: check(!p.panelHidden || !editors, "Show Terminal Panel"), hint: "⇧⌘J", action: () => st.togglePanel(projectId) },
-    { label: check(p.panelMaximized, "Maximize Terminal Panel"), hint: "⇧⌘M", action: () => st.togglePanelMaximized(projectId) },
-    { label: check(p.sidebarOpen, "Show Sidebar"), hint: "⌘B", action: () => st.updateProject(projectId, { sidebarOpen: !p.sidebarOpen }) },
+    { label: "Show Terminal Panel", checked: !p.panelHidden || !editors, hint: "⇧⌘J", action: () => st.togglePanel(projectId) },
+    { label: "Maximize Terminal Panel", checked: p.panelMaximized, hint: "⇧⌘M", action: () => st.togglePanelMaximized(projectId) },
+    { label: "Show Sidebar", checked: p.sidebarOpen, hint: "⌘B", action: () => st.updateProject(projectId, { sidebarOpen: !p.sidebarOpen }) },
   ];
 }

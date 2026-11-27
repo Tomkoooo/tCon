@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Icon } from "./icons";
 
 export type MenuItem =
   | "sep"
@@ -96,7 +97,7 @@ export function useContextMenu() {
               item.action();
             }}
           >
-            {checks && <span className="ctx-check">{item.checked ? "✓" : ""}</span>}
+            {checks && <span className="ctx-check">{item.checked && <Icon name="check" size={12} />}</span>}
             <span className="ctx-label">{item.label}</span>
             {item.hint && <span className="kbd-hint">{item.hint}</span>}
           </div>

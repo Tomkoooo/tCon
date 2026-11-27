@@ -8,6 +8,7 @@ import { FileIcon } from "../FileIcon";
 import { useContextMenu } from "../ContextMenu";
 import { dragResize } from "./drag";
 import { BoardView } from "../tasks/BoardView";
+import { Icon } from "../icons";
 
 const DRAG_TYPE = "text/tcon-editor-tab";
 const baseName = (p: string) => p.slice(p.lastIndexOf("/") + 1);
@@ -86,9 +87,7 @@ function EditorGroupView({ project, group, canSplit }: { project: Project; group
         <div className="ed-tabs-actions">
           {canSplit && activeTab && group.tabs.length > 1 && (
             <button className="icon-btn" title="Move to new group on the right (⌘\)" onClick={() => st.moveEditorTab(project.id, activeTab.id, "new")}>
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2">
-                <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" /><path d="M8 2.5v11" />
-              </svg>
+              <Icon name="splitRight" />
             </button>
           )}
         </div>
@@ -162,19 +161,15 @@ function EditorTabButton({ project, group, tab, index }: { project: Project; gro
         onContextMenu={onContextMenu}
       >
         {tab.kind === "board" ? (
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--claude)" strokeWidth="1.3" style={{ flex: "none" }}>
-            <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" /><path d="M6 2.5v11M10.5 2.5v6" />
-          </svg>
+          <Icon name="board" size={14} className="ed-tab-icon" />
         ) : (
           <FileIcon name={baseName(tab.path) || name} />
         )}
         <span className="ed-tab-name">{name}</span>
         {tab.diff && <span className="ed-tab-desc">{tab.diff.staged ? "staged" : "diff"}</span>}
         {!tab.diff && !tab.kind && dupe && parent && <span className="ed-tab-desc">{parent}</span>}
-        <button className="ed-tab-close" title="Close (⌘W)" onMouseDown={(e) => e.stopPropagation()} onClick={close}>
-          <svg className="x" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
-            <path d="M4 4l8 8M12 4l-8 8" />
-          </svg>
+        <button className="ed-tab-close" title="Close (⌘W)" aria-label={`Close ${name}`} onMouseDown={(e) => e.stopPropagation()} onClick={close}>
+          <Icon name="close" size={14} className="x" />
           <span className="dot" />
         </button>
       </div>

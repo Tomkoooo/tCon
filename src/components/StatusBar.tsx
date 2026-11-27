@@ -2,6 +2,7 @@ import { jumpToAttention } from "../commands";
 import { useWorkspace } from "../store/workspace";
 import { useTheming } from "../theming/store";
 import { MODEL_SETTING, modelLabel, normalizeModel } from "../claudeModel";
+import { ClaudeMark, Icon } from "./icons";
 
 export function StatusBar() {
   const project = useWorkspace((s) => (s.activeProjectId ? s.projects[s.activeProjectId] : null));
@@ -28,28 +29,29 @@ export function StatusBar() {
         <>
           <span className="sb-item path" title={project.rootPath}>{project.rootPath.replace(/^\/Users\/[^/]+/, "~")}</span>
           {git?.isRepo && (
-            <button className="sb-item clickable" title="Show git panel (⇧⌘G)" onClick={() => updateProject(project.id, { sidebarOpen: true, sidebarTab: "git" })}>
-              <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden><path d="M5 3v10M5 13a1.8 1.8 0 1 0 0 .01M5 3a1.8 1.8 0 1 0 0 .01M11 5a1.8 1.8 0 1 0 0 .01M11 6.8c0 3-6 2-6 4.4" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>
+            <button className="sb-item clickable" title="Source Control (⇧⌘G)" onClick={() => updateProject(project.id, { sidebarOpen: true, sidebarTab: "git" })}>
+              <Icon name="branch" size={12} />
               {git.branch ?? git.head ?? "detached"}
-              {git.dirty && ` · ${git.files.length} changed`}
-              {git.ahead > 0 && ` ↑${git.ahead}`}
-              {git.behind > 0 && ` ↓${git.behind}`}
+              {git.dirty && <span className="sb-sep">· {git.files.length} changed</span>}
+              {git.ahead > 0 && <span className="sb-sync" title={`${git.ahead} to push`}><Icon name="arrowUp" size={12} />{git.ahead}</span>}
+              {git.behind > 0 && <span className="sb-sync" title={`${git.behind} to pull`}><Icon name="arrowDown" size={12} />{git.behind}</span>}
             </button>
           )}
         </>
       )}
       <span className="spacer" />
-      {working > 0 && <span className="sb-item">● {working} working</span>}
-      {blocked > 0 && <button className="sb-item clickable attn" onClick={jumpToAttention} title="Jump (⌘J)">▲ {blocked} waiting for you</button>}
-      {done > 0 && <button className="sb-item clickable ok" onClick={jumpToAttention} title="Jump (⌘J)">✓ {done} done</button>}
+      {working > 0 && <span className="sb-item"><span className="sb-pip working" />{working} working</span>}
+      {blocked > 0 && <button className="sb-item clickable attn" onClick={jumpToAttention} title="Jump to it (⌘J)"><span className="sb-pip" />{blocked} need{blocked === 1 ? "s" : ""} you</button>}
+      {done > 0 && <button className="sb-item clickable ok" onClick={jumpToAttention} title="Jump to it (⌘J)"><Icon name="check" size={12} />{done} done</button>}
       {project && (
         <button
           className="sb-item clickable"
-          title={override ? "Claude model for this project (Project Settings)" : "Default Claude model for new sessions (Settings → Claude)"}
+          title={override ? "Claude model for this project" : "Default Claude model for new sessions"}
           onClick={() => setModal(override ? { kind: "projectSettings", projectId: project.id } : { kind: "profiles", section: "claude" })}
         >
-          ✳ {modelLabel(model)}
-          {override && " · project"}
+          <ClaudeMark size={11} />
+          {modelLabel(model)}
+          {override && <span className="sb-sep">· project</span>}
         </button>
       )}
     </div>

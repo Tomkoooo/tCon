@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Icon } from "./icons";
 
 export function Modal({
   title, subtitle, onClose, children, actions, className,
@@ -35,7 +36,7 @@ export function Modal({
           <span className="spacer" />
           {actions}
           <button className="icon-btn" aria-label="Close" title="Close (Esc)" onClick={onClose}>
-            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden><path d="M2.5 2.5l7 7m0-7l-7 7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>
+            <Icon name="close" />
           </button>
         </div>
         {children}

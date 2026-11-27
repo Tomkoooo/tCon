@@ -6,41 +6,19 @@
   height: 100%;
   min-height: 0;
   min-width: 0;
-  background: var(--bg-2);
-  color: var(--fg);
+  background: var(--sidebar-bg, var(--bg-2));
+  color: var(--sidebar-fg, var(--fg));
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: var(--fs-m);
   user-select: none;
   overflow: hidden;
 }
 
-.sb-tabs {
-  display: flex;
-  flex: none;
-  gap: 2px;
-  height: 30px;
-  align-items: stretch;
-  padding: 0 6px;
-  border-bottom: 1px solid var(--border);
+/* View title (VS Code convention: small caps label) */
+.sb-title {
+  flex: none; display: flex; align-items: center; gap: var(--sp-2); height: 36px; padding: 0 var(--sp-2) 0 var(--sp-3);
+  font-size: var(--fs-xs); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--sidebar-header-fg, var(--fg-dim));
 }
-
-.sb-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 10px;
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--fg-dim);
-  font: inherit;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  cursor: pointer;
-}
-.sb-tab:hover { color: var(--fg); }
-.sb-tab-active { color: var(--fg); border-bottom-color: var(--accent); }
 
 .sb-content { position: relative; flex: 1; min-height: 0; }
 .sb-pane { position: absolute; inset: 0; display: flex; flex-direction: column; min-height: 0; }
@@ -52,18 +30,21 @@
 .sb-count {
   display: inline-block;
   min-width: 16px;
-  padding: 0 5px;
+  padding: 0 var(--sp-1);
   border-radius: 8px;
   background: var(--bg-3);
-  color: var(--fg-dim);
-  font-size: 11px;
+  color: var(--fg);
+  font-size: var(--fs-xs);
+  font-weight: 500;
   line-height: 16px;
   text-align: center;
   text-transform: none;
   letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .sb-icon-btn {
+  flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -71,7 +52,7 @@
   height: 22px;
   padding: 0;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius);
   background: transparent;
   color: var(--fg-dim);
   cursor: pointer;
@@ -79,7 +60,7 @@
 .sb-icon-btn:hover { background: var(--bg-3); color: var(--fg); }
 .sb-icon-btn.sb-active { color: var(--accent); }
 
-.sb-empty { padding: 8px 12px; color: var(--fg-dim); font-size: 12px; }
+.sb-empty { padding: var(--sp-2) var(--sp-3); color: var(--fg-dim); font-size: var(--fs-s); }
 .sb-error { color: var(--danger); white-space: pre-wrap; word-break: break-word; }
 
 /* ---------- File tree ---------- */
@@ -91,8 +72,8 @@
   flex: none;
   align-items: center;
   gap: 2px;
-  height: 26px;
-  padding: 0 4px 0 12px;
+  height: 24px;
+  padding: 0 var(--sp-2) 0 var(--sp-3);
 }
 .sb-toolbar-title {
   flex: 1;
@@ -100,56 +81,56 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--fg-dim);
+  color: var(--fg);
 }
+/* toolbar buttons appear on hover / focus, like VS Code's view actions */
+.sb-toolbar .sb-icon-btn { opacity: 0; transition: opacity .1s; }
+.sb-tree:hover .sb-toolbar .sb-icon-btn, .sb-toolbar:focus-within .sb-icon-btn, .sb-toolbar .sb-icon-btn.sb-active { opacity: 1; }
 
-.sb-tree-list { flex: 1; outline: none; padding-bottom: 8px; }
+.sb-tree-list { flex: 1; outline: none; padding-bottom: var(--sp-2); }
 
 .sb-row {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--sp-1);
   height: 22px;
-  padding-right: 8px;
+  padding-right: var(--sp-2);
   white-space: nowrap;
   cursor: pointer;
 }
-.sb-row:hover { background: var(--bg-3); }
-.sb-row.sb-selected { background: var(--bg-3); box-shadow: inset 2px 0 0 var(--accent); }
-.sb-tree-list:focus .sb-row.sb-selected { outline: 1px solid var(--accent); outline-offset: -1px; }
-.sb-row.sb-error { cursor: default; font-size: 12px; }
+.sb-row:hover { background: var(--list-hover-bg, var(--bg-3)); }
+.sb-row.sb-selected { background: var(--list-active-bg, var(--bg-3)); color: var(--list-active-fg, inherit); }
+.sb-tree-list:focus-visible .sb-row.sb-selected { outline: 1px solid var(--accent); outline-offset: -1px; }
+.sb-row.sb-error { cursor: default; font-size: var(--fs-s); }
 
-.sb-twisty { flex: none; display: inline-flex; width: 14px; justify-content: center; color: var(--fg-dim); }
-.sb-twisty svg, .sb-chevron { transition: transform 0.1s ease; }
-.sb-twisty svg.sb-open, .sb-chevron.sb-open { transform: rotate(90deg); }
+.sb-twisty { flex: none; display: inline-flex; width: 16px; justify-content: center; color: var(--fg-dim); }
+.sb-twisty .icon, .sb-chevron { transition: transform .1s ease; }
+.sb-twisty .icon.sb-open, .sb-chevron.sb-open { transform: rotate(90deg); }
 
 .sb-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.sb-name.sb-dim { opacity: 0.7; }
+.sb-name.sb-dim { color: var(--fg-dim); }
 .sb-name.sb-symlink { font-style: italic; }
-.sb-desc { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--fg-dim); font-size: 12px; margin-left: 4px; }
+.sb-desc { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--fg-dim); font-size: var(--fs-s); margin-left: var(--sp-1); }
 
 .sb-badge {
   flex: none;
   margin-left: auto;
-  width: 14px;
+  width: 16px;
   text-align: center;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   font-family: var(--font-mono);
 }
 .sb-dot {
   flex: none;
   margin-left: auto;
-  margin-right: 4px;
+  margin-right: var(--sp-1);
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--warn);
-  opacity: 0.8;
+  background: var(--git-modified, var(--warn));
 }
 
 .sb-git-modified .sb-name, .sb-git-modified .sb-badge,
@@ -159,6 +140,7 @@
 .sb-git-deleted .sb-name, .sb-git-deleted .sb-badge { color: var(--git-deleted, var(--danger)); }
 .sb-git-conflict .sb-name, .sb-git-conflict .sb-badge { color: var(--git-conflict, var(--danger)); }
 .sb-git-deleted .sb-name { text-decoration: line-through; }
+.sb-row .file-icon { flex: none; margin-right: 2px; }
 
 /* ---------- Git panel ---------- */
 
@@ -168,92 +150,101 @@
   display: flex;
   flex: none;
   align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 10px 0 12px;
-  border-bottom: 1px solid var(--border);
+  gap: 2px;
+  height: 32px;
+  padding: 0 var(--sp-2) 0 var(--sp-1);
   color: var(--fg-dim);
 }
 .sb-branch { color: var(--fg); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.sb-aheadbehind { font-size: 12px; color: var(--accent); white-space: nowrap; }
-.sb-sha { font-family: var(--font-mono); font-size: 11px; color: var(--fg-dim); }
+.sb-branch-btn {
+  display: inline-flex; align-items: center; gap: var(--sp-1); min-width: 0; height: 24px; padding: 0 var(--sp-2); border: none; border-radius: var(--radius);
+  background: none; color: var(--fg-dim); cursor: pointer; font: inherit;
+}
+.sb-branch-btn:hover:not(:disabled) { background: var(--bg-3); }
+.sb-sync-btn {
+  display: inline-flex; align-items: center; gap: 2px; height: 22px; padding: 0 var(--sp-1); border: none; border-radius: var(--radius);
+  background: none; color: var(--fg-dim); cursor: pointer; font: inherit; font-size: var(--fs-s); font-variant-numeric: tabular-nums;
+}
+.sb-sync-btn:hover:not(:disabled) { background: var(--bg-3); color: var(--fg); }
+.sb-sync-btn.sb-sync-hot { color: var(--accent); }
+.sb-sync-btn:disabled, .sb-icon-btn:disabled, .sb-branch-btn:disabled { opacity: .45; cursor: default; }
 
 .sb-git-sections { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: auto; }
 
-.sb-section { display: flex; flex-direction: column; flex: none; border-bottom: 1px solid var(--border); }
+.sb-section { display: flex; flex-direction: column; flex: none; border-top: 1px solid var(--sidebar-border, var(--border)); }
 .sb-section-grow { flex: 1 1 auto; min-height: 160px; }
 .sb-section-body { display: flex; flex-direction: column; min-height: 0; }
 .sb-section-grow > .sb-section-body { flex: 1; }
 
+/* Section header (VS Code convention: small caps label) */
 .sb-section-header {
   position: sticky;
   top: 0;
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-1);
   height: 22px;
-  padding: 0 6px;
-  background: var(--bg-2);
-  font-size: 11px;
-  font-weight: 700;
+  padding: 0 var(--sp-2) 0 2px;
+  background: var(--sidebar-bg, var(--bg-2));
+  font-size: var(--fs-xs);
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: .04em;
   cursor: pointer;
 }
-.sb-section-header:hover { background: var(--bg-3); }
+.sb-section-header:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
 .sb-section-actions { display: inline-flex; gap: 2px; }
 
 .sb-subheader {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-1);
   height: 22px;
-  padding-left: 12px;
+  padding-left: var(--sp-3);
   color: var(--fg-dim);
-  font-size: 11px;
+  font-size: var(--fs-s);
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
   cursor: pointer;
 }
 .sb-subheader:hover { color: var(--fg); }
+.sb-subheader:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
 
-.sb-row.sb-current .sb-name { color: var(--accent); font-weight: 600; }
-.sb-head-mark { flex: none; width: 10px; color: var(--accent); font-size: 9px; }
+.sb-row.sb-current .sb-name { color: var(--fg); font-weight: 600; }
+.sb-head-mark { flex: none; width: 12px; display: inline-flex; color: var(--fg); }
 
+/* ref labels in the graph */
 .sb-chip {
   flex: none;
   display: inline-block;
   max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-right: 4px;
-  padding: 0 5px;
-  border-radius: 3px;
+  margin-right: var(--sp-1);
+  padding: 0 var(--sp-1);
+  border-radius: var(--radius-s);
   border: 1px solid var(--border);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   line-height: 15px;
   vertical-align: middle;
   white-space: nowrap;
+  color: var(--fg-dim);
 }
-.sb-chip-head { border-color: var(--accent); color: var(--accent); font-weight: 600; }
-.sb-chip-branch { border-color: var(--ok); color: var(--ok); }
-.sb-chip-remote { color: var(--fg-dim); }
-.sb-chip-tag { border-color: var(--warn); color: var(--warn); }
-
+.sb-chip-head { border-color: var(--accent); color: var(--fg); font-weight: 600; }
+.sb-chip-branch { border-color: color-mix(in srgb, var(--fg) 35%, transparent); color: var(--fg); }
+.sb-chip-tag { border-style: dashed; }
 
 .sb-graph-row {
   display: flex;
   align-items: center;
   height: 22px;
-  padding-right: 8px;
+  padding-right: var(--sp-2);
   white-space: nowrap;
   cursor: default;
   content-visibility: auto;
   contain-intrinsic-size: auto 22px;
 }
-.sb-graph-row:hover { background: var(--bg-3); }
+.sb-graph-row:hover { background: var(--list-hover-bg, var(--bg-3)); }
 .sb-graph-svg { flex: none; overflow: hidden; }
 .sb-graph-text {
   flex: 1;
@@ -263,67 +254,55 @@
   padding-left: 2px;
 }
 .sb-graph-summary { vertical-align: middle; }
-.sb-title {
-  flex: none; display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px;
-  font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-dim);
-}
-.sb-row .file-icon { flex: none; margin-right: 2px; }
 
 /* ---------- Git actions ---------- */
-.sb-git-head { gap: 2px; height: 32px; padding: 0 6px; }
-.sb-branch-btn {
-  display: inline-flex; align-items: center; gap: 5px; min-width: 0; height: 24px; padding: 0 6px; border: none; border-radius: 5px;
-  background: none; color: var(--fg-dim); cursor: pointer; font: inherit;
-}
-.sb-branch-btn:hover:not(:disabled) { background: var(--bg-3); }
-.sb-sync-btn {
-  display: inline-flex; align-items: center; gap: 3px; height: 22px; padding: 0 6px; border: 1px solid transparent; border-radius: 5px;
-  background: none; color: var(--fg-dim); cursor: pointer; font: inherit; font-size: 11.5px;
-}
-.sb-sync-btn:hover:not(:disabled) { background: var(--bg-3); color: var(--fg); }
-.sb-sync-btn.sb-sync-hot { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
-.sb-sync-btn:disabled, .sb-icon-btn:disabled, .sb-branch-btn:disabled { opacity: .45; cursor: default; }
-
-.sb-git-form { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px 0; }
-.sb-git-form:last-of-type { padding-bottom: 8px; }
+.sb-git-form { flex: none; display: flex; flex-direction: column; gap: var(--sp-2); padding: 0 var(--sp-2) var(--sp-2) var(--sp-3); }
 .sb-git-form input { width: 100%; }
-.sb-commit-msg { width: 100%; resize: none; font-size: 12.5px; line-height: 1.4; user-select: text; }
+.sb-commit-msg { width: 100%; resize: none; font-size: var(--fs-m); line-height: 1.4; user-select: text; }
 .sb-commit-row { display: flex; }
 .sb-commit-btn {
-  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 26px; border: none;
-  border-radius: 5px 0 0 5px; background: var(--accent); color: var(--accent-fg); font: inherit; font-size: 12.5px; cursor: pointer;
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-1); height: 28px; border: none;
+  border-radius: var(--radius) 0 0 var(--radius); background: var(--accent); color: var(--accent-fg); font: inherit; cursor: pointer;
 }
 .sb-commit-more {
-  width: 26px; height: 26px; border: none; border-left: 1px solid color-mix(in srgb, var(--accent-fg) 25%, transparent);
-  border-radius: 0 5px 5px 0; background: var(--accent); color: var(--accent-fg); cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border: none; border-left: 1px solid color-mix(in srgb, var(--accent-fg) 25%, transparent); padding: 0;
+  border-radius: 0 var(--radius) var(--radius) 0; background: var(--accent); color: var(--accent-fg); cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
 }
-.sb-commit-btn:hover:not(:disabled), .sb-commit-more:hover:not(:disabled) { filter: brightness(1.1); }
+.sb-commit-btn:hover:not(:disabled), .sb-commit-more:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 88%, var(--fg)); }
 .sb-commit-btn:disabled, .sb-commit-more:disabled { opacity: .5; cursor: default; }
 
 .sb-git-banner {
-  flex: none; display: flex; align-items: flex-start; gap: 6px; margin: 8px 10px 0; padding: 6px 8px; border-radius: 5px;
-  background: var(--bg-3); font-size: 12px; white-space: pre-wrap; word-break: break-word; max-height: 120px; overflow: auto; user-select: text;
+  flex: none; display: flex; align-items: flex-start; gap: var(--sp-2); margin: 0 var(--sp-2) var(--sp-2) var(--sp-3); padding: var(--sp-1) var(--sp-1) var(--sp-1) var(--sp-2); border-radius: var(--radius);
+  background: var(--bg-3); font-size: var(--fs-s); white-space: pre-wrap; word-break: break-word; max-height: 120px; overflow: auto; user-select: text; cursor: default;
 }
-.sb-git-banner > span { flex: 1; }
-.sb-git-banner-error { color: var(--danger); box-shadow: inset 3px 0 0 var(--danger); }
+.sb-git-banner > span { flex: 1; padding-top: 2px; }
+.sb-git-banner-error { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
 
-.sb-row-actions { display: none; align-items: center; gap: 1px; flex: none; }
-.sb-change:hover .sb-row-actions { display: inline-flex; }
+/* row actions: shown on hover and when a button inside has keyboard focus */
+/* Overlaid on the row (no reserved space, so names don't truncate early). */
+.sb-change { position: relative; padding-right: var(--sp-2); }
+.sb-row-actions {
+  position: absolute; right: 28px; top: 0; bottom: 0; display: inline-flex; align-items: center; gap: 2px; padding-left: var(--sp-1);
+  background: var(--list-hover-bg, var(--bg-3)); opacity: 0; pointer-events: none;
+}
+.sb-subheader.sb-change .sb-row-actions { right: var(--sp-2); }
+.sb-change:hover .sb-row-actions, .sb-change:focus-within .sb-row-actions { opacity: 1; pointer-events: auto; }
+.sb-change:focus-within { background: var(--list-hover-bg, var(--bg-3)); }
 .sb-row-actions .sb-icon-btn { width: 20px; height: 20px; }
-.sb-change { padding-right: 8px; }
+.sb-row-actions .sb-icon-btn:hover { background: color-mix(in srgb, var(--fg) 10%, transparent); }
 
 /* ---------- commit sync state (graph) ---------- */
-.sb-graph-row.sb-sync-outgoing { background: color-mix(in srgb, var(--sync-out) 9%, transparent); box-shadow: inset 2px 0 0 var(--sync-out); }
+.sb-graph-row.sb-sync-outgoing { box-shadow: inset 2px 0 0 var(--sync-out); }
 .sb-graph-row.sb-sync-outgoing .sb-graph-summary { color: var(--fg); font-weight: 600; }
-.sb-graph-row.sb-sync-incoming { background: color-mix(in srgb, var(--sync-in) 8%, transparent); box-shadow: inset 2px 0 0 var(--sync-in); }
+.sb-graph-row.sb-sync-incoming { box-shadow: inset 2px 0 0 var(--sync-in); }
 .sb-graph-row.sb-sync-incoming .sb-graph-summary { color: var(--sync-in); font-style: italic; }
 .sb-graph-row.sb-sync-local { box-shadow: inset 2px 0 0 color-mix(in srgb, var(--sync-local) 70%, transparent); }
 .sb-graph-row.sb-sync-local .sb-graph-summary { color: color-mix(in srgb, var(--sync-local) 70%, var(--fg)); }
-.sb-sync-badge { flex: none; margin-left: 6px; font-size: 11px; font-weight: 700; }
+.sb-sync-badge { flex: none; margin-left: var(--sp-1); display: inline-flex; }
 .sb-sync-outgoing .sb-sync-badge { color: var(--sync-out); }
 .sb-sync-incoming .sb-sync-badge { color: var(--sync-in); }
-.sb-sync-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 5px 12px; font-size: 11px; color: var(--fg-dim); border-bottom: 1px solid var(--border); }
-.sb-sync-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.sb-sync-legend { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); padding: var(--sp-1) var(--sp-3); font-size: var(--fs-xs); color: var(--fg-dim); }
+.sb-sync-legend span { display: inline-flex; align-items: center; gap: var(--sp-1); }
 .sb-sync-legend i { width: 8px; height: 8px; border-radius: 50%; }
 .sb-sync-legend .sb-sync-outgoing i { background: var(--sync-out); }
 .sb-sync-legend .sb-sync-incoming i { border: 1.5px dashed var(--sync-in); width: 7px; height: 7px; }

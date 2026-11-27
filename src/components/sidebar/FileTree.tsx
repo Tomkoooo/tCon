@@ -6,6 +6,7 @@ import { api } from "../../api";
 import type { FsChangedEvent, FsEntry, GitStatus } from "../../types";
 import { buildDecorIndex, lookupDecor, parentDir, trimSlash } from "./gitDecor";
 import { FileIcon } from "../FileIcon";
+import { Icon } from "../icons";
 import "./sidebar.css";
 
 export interface FileTreeProps {
@@ -231,24 +232,16 @@ export function FileTree({ root: rawRoot, gitStatus, onOpenFile }: FileTreeProps
         <button
           className={`sb-icon-btn${showHidden ? " sb-active" : ""}`}
           title={showHidden ? "Hide hidden files" : "Show hidden files"}
+          aria-pressed={showHidden}
           onClick={() => setShowHidden((v) => !v)}
         >
-          {/* eye */}
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-            <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" />
-            <circle cx="8" cy="8" r="2" />
-            {!showHidden && <path d="M2 14L14 2" />}
-          </svg>
+          <Icon name={showHidden ? "eye" : "eyeOff"} />
         </button>
-        <button className="sb-icon-btn" title="Refresh explorer, git status and open files from disk" onClick={refresh}>
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-            <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2v3h-3" />
-          </svg>
+        <button className="sb-icon-btn" title="Refresh" aria-label="Refresh" onClick={refresh}>
+          <Icon name="refresh" />
         </button>
-        <button className="sb-icon-btn" title="Collapse all" onClick={collapseAll}>
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-            <path d="M4 10l4-4 4 4" />
-          </svg>
+        <button className="sb-icon-btn" title="Collapse folders" aria-label="Collapse folders" onClick={collapseAll}>
+          <Icon name="collapse" />
         </button>
       </div>
       <div className="sb-scroll sb-tree-list" ref={listRef} tabIndex={0} onKeyDown={onKeyDown}>
@@ -272,9 +265,7 @@ export function FileTree({ root: rawRoot, gitStatus, onOpenFile }: FileTreeProps
               >
                 <span className="sb-twisty">
                   {entry.isDir && (
-                    <svg width="10" height="10" viewBox="0 0 10 10" className={isOpen ? "sb-open" : ""}>
-                      <path d="M3 1.5L7 5L3 8.5" fill="none" stroke="currentColor" strokeWidth="1.3" />
-                    </svg>
+                    <Icon name="chevronRight" size={14} className={isOpen ? "sb-open" : ""} />
                   )}
                 </span>
                 <FileIcon name={entry.name} dir={entry.isDir} open={isOpen} />

@@ -7,6 +7,7 @@ import { PRIORITIES, type BoardState, type Task } from "../../tasks/types";
 import { useWorkspace } from "../../store/workspace";
 import { confirmDelete } from "./TasksView";
 import { AgentChip, ClaudeMark, PriorityIcon, StatusIcon, labelColor, relTime, useAgentView } from "./parts";
+import { Icon } from "../icons";
 
 interface Section { heading: string; body: string }
 
@@ -152,19 +153,20 @@ export function TaskDrawer({ root, task, state, onClose }: { root: string; task:
         <div className="tkd-head">
           <StatusIcon status={task.status} />
           <span className="tkd-id">{task.id}</span>
-          <span className="tkd-updated" title={task.updated}>updated {relTime(task.updated || task.created)}</span>
+          <span className="tkd-updated" title={task.updated}>Updated {relTime(task.updated || task.created)}</span>
           <span className="sb-spacer" />
           {project && (
             <button
               className="sb-icon-btn"
               title={`Open .tcon/tasks/${task.id}.md`}
+              aria-label={`Open .tcon/tasks/${task.id}.md`}
               onClick={() => useWorkspace.getState().openEditor(project.id, `${project.rootPath}/.tcon/tasks/${task.id}.md`)}
             >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M9.5 1.5H4a1.5 1.5 0 0 0-1.5 1.5v10A1.5 1.5 0 0 0 4 14.5h8a1.5 1.5 0 0 0 1.5-1.5V5.5z" /><path d="M9.5 1.5v4h4" /></svg>
+              <Icon name="file" />
             </button>
           )}
-          <button className="sb-icon-btn" title="Close (Esc)" onClick={closeAll}>
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M4 4l8 8M12 4l-8 8" /></svg>
+          <button className="sb-icon-btn" title="Close (Esc)" aria-label="Close" onClick={closeAll}>
+            <Icon name="close" />
           </button>
         </div>
 
@@ -211,12 +213,12 @@ export function TaskDrawer({ root, task, state, onClose }: { root: string; task:
                 <span key={l} className="tk-label tk-label-edit" style={{ ["--tk-label" as string]: labelColor(l) }}>
                   <i />
                   {l}
-                  <button title="Remove label" onClick={() => void st.update(root, task.id, { labels: task.labels.filter((x) => x !== l) })}>×</button>
+                  <button title={`Remove ${l}`} aria-label={`Remove ${l}`} onClick={() => void st.update(root, task.id, { labels: task.labels.filter((x) => x !== l) })}><Icon name="close" size={12} /></button>
                 </span>
               ))}
               <input
                 className="tkd-label-input"
-                placeholder={task.labels.length ? "+" : "Add label…"}
+                placeholder={task.labels.length ? "Add" : "Add label"}
                 value={labelDraft}
                 onChange={(e) => setLabelDraft(e.target.value)}
                 onBlur={addLabel}
@@ -249,22 +251,22 @@ export function TaskDrawer({ root, task, state, onClose }: { root: string; task:
 
           <div className="tkd-actions">
             {running || queued ? (
-              <button className="tkd-btn" onClick={() => void stopAgent(root, task.id)}>
-                <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1.5" y="1.5" width="7" height="7" rx="1" fill="currentColor" /></svg>
-                {queued ? "Unqueue" : "Stop"}
+              <button className="btn small" onClick={() => void stopAgent(root, task.id)}>
+                <Icon name="stop" size={14} />
+                {queued ? "Remove from queue" : "Stop agent"}
               </button>
             ) : (
-              <button className="tkd-btn tkd-btn-claude" disabled={!project} title={project ? "Open a terminal running Claude on this task" : "Open this folder as a project first"} onClick={() => void startAgent(root, task.id)}>
+              <button className="btn small" disabled={!project} title={project ? undefined : "Open this folder as a project first"} onClick={() => void startAgent(root, task.id)}>
                 <ClaudeMark size={12} />
-                {task.agent === "done" || task.agent === "failed" ? "Run Claude again" : "Let Claude work on this"}
+                {task.agent === "done" || task.agent === "failed" ? "Run Claude again" : "Start Claude"}
               </button>
             )}
-            <button className="tkd-btn" disabled={!alive} title={alive ? "Show the agent's terminal" : "No agent terminal is open"} onClick={() => openAgentTerminal(root, task.id)}>
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" /><path d="M4.5 6l2 2-2 2M8.5 10.5h3" /></svg>
-              Open agent terminal
+            <button className="btn small" disabled={!alive} title={alive ? undefined : "No agent terminal is open"} onClick={() => openAgentTerminal(root, task.id)}>
+              <Icon name="terminal" size={14} />
+              Agent terminal
             </button>
             <span className="sb-spacer" />
-            <button className="tkd-btn tkd-btn-danger" onClick={() => void confirmDelete(root, task)}>Delete</button>
+            <button className="btn small ghost danger" onClick={() => void confirmDelete(root, task)}>Delete</button>
           </div>
 
           <div className="tkd-section">
@@ -272,7 +274,7 @@ export function TaskDrawer({ root, task, state, onClose }: { root: string; task:
             <textarea
               className="tkd-desc"
               value={desc}
-              placeholder="Notes, steps to reproduce, who reported it… (Markdown)"
+              placeholder="Add a description (Markdown)"
               onChange={(e) => {
                 descDirty.current = true;
                 setDesc(e.target.value);
@@ -290,7 +292,7 @@ export function TaskDrawer({ root, task, state, onClose }: { root: string; task:
                 </div>
               ) : (
                 <div className="tkd-dim tkd-placeholder">
-                  {/plan/i.test(s.heading) ? "Claude writes its plan here." : /verification/i.test(s.heading) ? "Test / typecheck / build results go here." : "—"}
+                  {/plan/i.test(s.heading) ? "Claude adds its plan here." : /verification/i.test(s.heading) ? "Test and build results appear here." : "Empty"}
                 </div>
               )}
             </div>

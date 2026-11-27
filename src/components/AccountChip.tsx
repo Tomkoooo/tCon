@@ -3,6 +3,7 @@ import { accountLabel, planLabel, useAccounts } from "../store/accounts";
 import { useWorkspace } from "../store/workspace";
 import type { Account, AuthStatus } from "../types";
 import { useContextMenu, type MenuItem } from "./ContextMenu";
+import { Icon } from "./icons";
 
 type Status = ReturnType<typeof useAccounts.getState>["status"][string];
 
@@ -43,7 +44,7 @@ export function AccountChip() {
 
   const open = (e: React.MouseEvent) => {
     const acc = useAccounts.getState();
-    const needProject = hasProject ? undefined : "Open a project first — the login runs in one of its terminals";
+    const needProject = hasProject ? undefined : "Open a project first. The login runs in one of its terminals.";
     const org = accountOrg(st);
 
     const items: MenuItem[] = [
@@ -54,8 +55,7 @@ export function AccountChip() {
             <div className="account-menu-id">
               <div className="account-menu-email">{loggedIn ? accountLabel(active, st) : "Not logged in"}</div>
               <div className="account-menu-sub">
-                {plan && <span className="ui-badge claude">{plan}</span>}
-                <span>{loggedIn ? org ?? (active.configDir ? "Separate login" : "Default account") : accountLabel(active, st)}</span>
+                {[plan, loggedIn ? org ?? (active.configDir ? "Separate login" : "Default account") : accountLabel(active, st)].filter(Boolean).join(" · ")}
               </div>
             </div>
           </div>
@@ -67,8 +67,7 @@ export function AccountChip() {
       items.push({
         custom: (
           <div className="account-nudge">
-            <div className="account-nudge-title">Use more than one Claude account?</div>
-            <div className="account-nudge-text">Add each account once. tCon keeps every login saved, so you switch with one click instead of logging in again.</div>
+            <div className="account-nudge-text">Add another Claude account to switch between logins without signing in again.</div>
             <div className="row">
               <button
                 className="btn primary small"
@@ -77,7 +76,7 @@ export function AccountChip() {
                   openAccountSettings();
                 }}
               >
-                Set up accounts
+                Add account
               </button>
               <button
                 className="btn ghost small"
@@ -143,10 +142,9 @@ export function AccountChip() {
       >
         <span className="account-dot" />
         <span className="account-name">{st ? (loggedIn ? accountLabel(active, st) : "Not logged in") : "…"}</span>
-        {plan && <span className="account-plan">{plan}</span>}
-        {loginsInFlight > 0 && <span className="account-plan">login…</span>}
-        {showNudge && <span className="account-nudge-dot" title="Tip: switch between Claude accounts without logging in again" />}
-        <svg width="9" height="9" viewBox="0 0 10 10"><path d="M2 3.5l3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>
+        {loginsInFlight > 0 ? <span className="account-plan">Logging in…</span> : plan && <span className="account-plan">{plan}</span>}
+        {showNudge && <span className="account-nudge-dot" />}
+        <Icon name="chevronDown" size={12} />
       </button>
       {menu.element}
     </>

@@ -1,19 +1,23 @@
 /* VS Code-like workbench: activity bar · sidebar · (editor area + terminal panel) */
 
 .activitybar {
-  width: 44px; flex: none; display: flex; flex-direction: column; align-items: center; padding: 4px 0 6px;
+  width: 44px; flex: none; display: flex; flex-direction: column; align-items: center; padding: var(--sp-1) 0 var(--sp-2);
   background: var(--activitybar-bg, var(--bg-2)); border-right: 1px solid var(--activitybar-border, var(--border));
 }
 .ab-btn {
-  position: relative; width: 44px; height: 44px; border: none; background: none; cursor: pointer;
-  display: flex; align-items: center; justify-content: center; color: var(--activitybar-inactive-fg, var(--fg-dim)); opacity: .85;
+  position: relative; width: 44px; height: 44px; border: none; background: none; cursor: pointer; padding: 0;
+  display: flex; align-items: center; justify-content: center; color: var(--activitybar-inactive-fg, var(--fg-dim));
 }
-.ab-btn:hover { color: var(--activitybar-fg, var(--fg)); opacity: 1; }
-.ab-btn.on { color: var(--activitybar-fg, var(--fg)); opacity: 1; box-shadow: inset 2px 0 0 var(--activitybar-indicator, var(--accent)); }
+.ab-btn:hover { color: var(--activitybar-fg, var(--fg)); }
+.ab-btn:focus-visible { outline-offset: -4px; }
+/* active view: VS Code's left indicator */
+.ab-btn.on { color: var(--activitybar-fg, var(--fg)); box-shadow: inset 2px 0 0 var(--activitybar-indicator, var(--accent)); }
 .ab-badge {
-  position: absolute; right: 5px; bottom: 6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
-  background: var(--badge-bg, var(--accent)); color: var(--badge-fg, #fff); font-size: 9.5px; font-weight: 600; line-height: 16px; text-align: center;
+  position: absolute; right: 4px; bottom: 6px; min-width: 16px; height: 16px; padding: 0 var(--sp-1); border-radius: 8px;
+  background: var(--badge-bg, var(--accent)); color: var(--badge-fg, var(--accent-fg)); font-size: var(--fs-xs); font-weight: 600; line-height: 16px; text-align: center;
+  font-variant-numeric: tabular-nums;
 }
+.ab-badge.warn { background: var(--warn); color: var(--activitybar-bg, var(--bg-2)); }
 
 .workbench { flex: 1; min-width: 0; min-height: 0; display: flex; }
 .workbench.pos-bottom, .workbench.pos-top { flex-direction: column; }
@@ -37,35 +41,26 @@ body.resizing, body.resizing * { user-select: none !important; }
 }
 .panel-tabs { flex: 1; min-width: 0; display: flex; align-items: stretch; overflow-x: auto; scrollbar-width: none; }
 .panel-tabs::-webkit-scrollbar { display: none; }
-.panel-actions { flex: none; display: flex; align-items: center; gap: 1px; padding: 0 6px; }
-.panel-actions .icon-btn { width: 24px; height: 24px; }
-.panel-new {
-  flex: none; align-self: center; width: 24px; height: 24px; margin-left: 2px; border: none; background: none; border-radius: 5px;
-  color: var(--fg-dim); cursor: pointer; font-size: 16px; line-height: 1;
-}
-.panel-new.claude { color: var(--claude); font-size: 13px; }
-.panel-new:hover { background: var(--bg-3); color: var(--fg); }
-.panel-new.claude:hover { color: var(--claude); }
+.panel-actions { flex: none; display: flex; align-items: center; gap: 2px; padding: 0 var(--sp-1); }
+.panel-new { align-self: center; margin-left: 2px; }
 .panel-body { flex: 1; min-height: 0; min-width: 0; display: flex; }
-.panel-body > .empty-state .row { gap: 8px; }
 
 .term-tab {
-  position: relative; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 12px; max-width: 240px;
-  color: var(--fg-dim); cursor: default; white-space: nowrap; border-right: 1px solid var(--border); font-size: 12px;
+  position: relative; flex: none; display: flex; align-items: center; gap: var(--sp-2); padding: 0 var(--sp-1) 0 var(--sp-3); max-width: 240px;
+  color: var(--fg-dim); cursor: default; white-space: nowrap; border-right: 1px solid var(--border); font-size: var(--fs-s);
 }
-.term-tab:hover { color: var(--fg); background: color-mix(in srgb, var(--bg-3) 50%, transparent); }
+.term-tab:hover { color: var(--fg); }
 .term-tab.active { color: var(--tab-active-fg, var(--fg)); background: var(--panel-bg, var(--term-bg)); }
 .term-tab.active::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--pane-accent, var(--accent)); }
 .term-tab.drop { box-shadow: inset 2px 0 0 var(--accent); }
 .term-tab-title { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.term-tab-claude { color: var(--claude); font-size: 11px; }
-.term-tab-count { display: inline-flex; align-items: center; gap: 2px; font-size: 10.5px; color: var(--fg-dim); }
+.term-tab-count { display: inline-flex; align-items: center; gap: 2px; font-size: var(--fs-xs); color: var(--fg-dim); }
 .term-tab-close, .ed-tab-close {
-  flex: none; width: 20px; height: 20px; border: none; background: none; border-radius: 4px; cursor: pointer;
+  flex: none; width: 20px; height: 20px; border: none; background: none; border-radius: var(--radius); cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center; color: var(--fg-dim); padding: 0;
 }
-.term-tab-close { visibility: hidden; }
-.term-tab:hover .term-tab-close, .term-tab.active .term-tab-close { visibility: visible; }
+.term-tab-close { opacity: 0; }
+.term-tab:hover .term-tab-close, .term-tab.active .term-tab-close, .term-tab-close:focus-visible { opacity: 1; }
 .term-tab-close:hover, .ed-tab-close:hover { background: var(--bg-3); color: var(--fg); }
 
 /* ---------- editor area ---------- */
@@ -73,16 +68,15 @@ body.resizing, body.resizing * { user-select: none !important; }
 .ed-group-host { display: flex; min-width: 0; min-height: 0; }
 .split-divider.vertical { width: 1px; cursor: col-resize; }
 .ed-group { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
-.ed-tabs { height: 34px; flex: none; display: flex; background: var(--tabs-bg, var(--bg-2)); border-bottom: 1px solid var(--tab-border, var(--border)); }
+.ed-tabs { height: 36px; flex: none; display: flex; background: var(--tabs-bg, var(--bg-2)); border-bottom: 1px solid var(--tab-border, var(--border)); }
 .ed-tabs-scroll { flex: 1; min-width: 0; display: flex; overflow-x: auto; scrollbar-width: thin; }
 .ed-tabs-scroll::-webkit-scrollbar { height: 3px; }
 .ed-tabs-scroll::-webkit-scrollbar-thumb { background: var(--bg-3); }
-.ed-tabs-actions { flex: none; display: flex; align-items: center; padding: 0 6px; }
-.ed-tabs-actions .icon-btn { width: 24px; height: 24px; }
+.ed-tabs-actions { flex: none; display: flex; align-items: center; padding: 0 var(--sp-1); }
 
 .ed-tab {
-  position: relative; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 4px 0 10px; min-width: 0; max-width: 260px;
-  color: var(--tab-inactive-fg, var(--fg-dim)); background: var(--tab-inactive-bg, transparent); border-right: 1px solid var(--tab-border, var(--border)); cursor: default; white-space: nowrap; font-size: 12.5px;
+  position: relative; flex: none; display: flex; align-items: center; gap: var(--sp-2); padding: 0 var(--sp-1) 0 var(--sp-3); min-width: 0; max-width: 260px;
+  color: var(--tab-inactive-fg, var(--fg-dim)); background: var(--tab-inactive-bg, transparent); border-right: 1px solid var(--tab-border, var(--border)); cursor: default; white-space: nowrap; font-size: var(--fs-m);
 }
 .ed-tab:hover { color: var(--fg); }
 .ed-tab.active { background: var(--tab-active-bg, var(--bg)); color: var(--tab-active-fg, var(--fg)); }
@@ -90,12 +84,13 @@ body.resizing, body.resizing * { user-select: none !important; }
 .ed-group.active .ed-tab.active::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--pane-accent, var(--accent)); }
 .ed-tab.preview .ed-tab-name { font-style: italic; }
 .ed-tab.drop { box-shadow: inset 2px 0 0 var(--accent); }
+.ed-tab-icon { color: var(--fg-dim); }
 .ed-tab-name { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.ed-tab-desc { color: var(--fg-dim); font-size: 11px; }
+.ed-tab-desc { color: var(--fg-dim); font-size: var(--fs-xs); }
 .ed-tab-close .x { visibility: hidden; }
 .ed-tab-close .dot { display: none; width: 8px; height: 8px; border-radius: 50%; background: var(--fg); position: absolute; }
 .ed-tab-close { position: relative; }
-.ed-tab:hover .ed-tab-close .x, .ed-tab.active .ed-tab-close .x { visibility: visible; }
+.ed-tab:hover .ed-tab-close .x, .ed-tab.active .ed-tab-close .x, .ed-tab-close:focus-visible .x { visibility: visible; }
 .ed-tab.dirty .ed-tab-close .dot { display: block; }
 .ed-tab.dirty .ed-tab-close .x { visibility: hidden; }
 .ed-tab.dirty .ed-tab-close:hover .x { visibility: visible; }

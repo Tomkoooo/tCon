@@ -89,8 +89,8 @@ export function AppearanceSection() {
       title="Appearance"
       description={
         <>
-          Uses your VS Code, Cursor, VSCodium and Windsurf themes ({catalog.colorThemes.length} color, {catalog.iconThemes.length} icon themes found).
-          Drop extra themes in <code>~/.tcon/themes</code> or unpacked extensions in <code>~/.tcon/extensions</code>.
+          {catalog.colorThemes.length} color and {catalog.iconThemes.length} icon themes found in VS Code, Cursor, VSCodium, Windsurf
+          and <code>~/.tcon/themes</code>.
         </>
       }
     >
@@ -148,7 +148,7 @@ export function AppearanceSection() {
       </SettingRow>
 
       <SettingsGroup title="Customization" />
-      <SettingRow label="Load custom.css" description="Apply ~/.tcon/custom.css on top of the theme (reloads on save)." settingKey="tcon.customCss" keywords="css style">
+      <SettingRow label="Load custom.css" description="Applies ~/.tcon/custom.css on top of the theme." settingKey="tcon.customCss" keywords="css style">
         <span className="row" style={{ gap: 8 }}>
           <button className="btn small ghost" onClick={() => openConfigInEditor("custom.css")}>Edit</button>
           <Toggle checked={settings["tcon.customCss"] === true} onChange={(v) => void setSetting("tcon.customCss", v)} />
@@ -162,7 +162,7 @@ export function TerminalSection() {
   const [cursorStyle, setCursorStyle] = useSetting<string>("terminal.integrated.cursorStyle", "block");
   const [blink, setBlink] = useSetting<boolean>("terminal.integrated.cursorBlink", true);
   return (
-    <SettingsSection id="terminal" title="Terminal" description="Applies to every terminal immediately, including running sessions.">
+    <SettingsSection id="terminal" title="Terminal" description="Changes apply to running terminals too.">
       <SettingRow label="Font family" settingKey="terminal.integrated.fontFamily" keywords="font mono">
         <TextSetting k="terminal.integrated.fontFamily" placeholder='"SF Mono", Menlo, monospace' mono />
       </SettingRow>

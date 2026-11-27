@@ -8,6 +8,7 @@ import { MODEL_SETTING, modelLabel, normalizeModel } from "../claudeModel";
 import type { RecentPath } from "../types";
 import { Modal } from "./Modal";
 import { ColorPicker, Field, Toggle } from "./ui";
+import { Icon } from "./icons";
 
 function relTime(ms: number) {
   const d = Date.now() - ms;
@@ -98,7 +99,7 @@ export function NewProjectModal() {
             <div className="row">
               <input
                 autoFocus
-                placeholder="Filter recent projects…"
+                placeholder="Filter recent projects"
                 value={filter}
                 onChange={(e) => {
                   setFilter(e.target.value);
@@ -109,7 +110,7 @@ export function NewProjectModal() {
               <button className="btn" onClick={() => setNewFolder({ parent: path || "", name: "", git: true })}>New folder…</button>
             </div>
             <div className="recent-list">
-              {shown.length === 0 && <div className="recent-item hint">No recent projects yet — use Browse…</div>}
+              {shown.length === 0 && <div className="recent-empty">{filter ? "No matches" : "No recent projects"}</div>}
               {shown.map((r, i) => (
                 <div
                   key={r.path}
@@ -125,37 +126,35 @@ export function NewProjectModal() {
                   }}
                 >
                   <button
-                    className={`star${r.pinned ? " on" : ""}`}
+                    className={`icon-btn${r.pinned ? " pinned" : ""}`}
                     title={r.pinned ? "Unpin" : "Pin to top"}
+                    aria-label={r.pinned ? "Unpin" : "Pin to top"}
+                    aria-pressed={r.pinned}
                     onClick={(e) => {
                       e.stopPropagation();
                       void api.recentPin(r.path, !r.pinned).then(reload);
                     }}
                   >
-                    {r.pinned ? "★" : "☆"}
+                    <Icon name={r.pinned ? "starFilled" : "star"} size={14} />
                   </button>
                   <span className="recent-name">{base(r.path)}</span>
                   <span className="recent-path" title={r.path}>{"\u200e" + r.path}</span>
                   <span className="recent-time">{relTime(r.lastUsed)}</span>
                   <button
-                    className="star"
+                    className="icon-btn remove"
                     title="Remove from recent"
+                    aria-label="Remove from recent"
                     onClick={(e) => {
                       e.stopPropagation();
                       void api.recentRemove(r.path).then(reload);
                     }}
                   >
-                    ×
+                    <Icon name="close" size={14} />
                   </button>
                 </div>
               ))}
             </div>
-            {path && (
-              <div className="hint">
-                Selected: <b>{path}</b>
-                {openPath && " — already open: a new pane will be added to that tab"}
-              </div>
-            )}
+            {openPath && <div className="hint">Already open. Opening it adds a terminal to that tab.</div>}
           </>
         ) : (
           <>
@@ -170,27 +169,27 @@ export function NewProjectModal() {
               <label>Folder name</label>
               <input autoFocus value={newFolder.name} onChange={(e) => setNewFolder({ ...newFolder, name: e.target.value })} />
             </div>
-            <Toggle checked={newFolder.git} onChange={(v) => setNewFolder({ ...newFolder, git: v })} label="Initialize a git repository" />
-            <button className="btn ghost" style={{ alignSelf: "flex-start" }} onClick={() => setNewFolder(null)}>← Back to recent</button>
+            <Toggle checked={newFolder.git} onChange={(v) => setNewFolder({ ...newFolder, git: v })} label="Initialize git repository" />
+            <button className="btn small ghost" style={{ alignSelf: "flex-start" }} onClick={() => setNewFolder(null)}><Icon name="arrowLeft" size={14} />Recent projects</button>
           </>
         )}
 
         <div className="row top">
           <Field label="Tab name" grow>
-            <input placeholder={path ? base(path) : "defaults to folder name"} value={name} onChange={(e) => setName(e.target.value)} />
+            <input placeholder={path ? base(path) : "Folder name"} value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
           <Field label="Color" grow>
             <ColorPicker value={color} onChange={setColor} palette={PALETTE} />
           </Field>
         </div>
         <div className="launch-row">
-          <Toggle checked={claude} onChange={setClaude} label={<>Start a Claude Code session</>} />
+          <Toggle checked={claude} onChange={setClaude} label="Start Claude Code" />
           {claude && <LaunchSummary />}
         </div>
         {error && <div className="settings-error">{error}</div>}
       </div>
       <div className="modal-foot">
-        <span className="hint">↑↓ to pick · Enter to open</span>
+        <span className="hint">↑↓ select · ↵ open</span>
         <span className="spacer" />
         <button className="btn ghost" onClick={close}>Cancel</button>
         <button className="btn primary" onClick={submit} disabled={!path && !newFolder}>

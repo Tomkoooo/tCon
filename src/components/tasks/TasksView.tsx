@@ -9,6 +9,7 @@ import { useContextMenu, type MenuItem } from "../ContextMenu";
 import {
   AgentChip, ClaudeMark, PriorityIcon, StatusIcon, TASK_DRAG, adjustedIndex, dropIndexFor, readDrag, useAgentView, type DragPayload,
 } from "./parts";
+import { Icon } from "../icons";
 import "./tasks.css";
 
 const COLLAPSE_KEY = "tcon.tasks.collapsed";
@@ -22,33 +23,35 @@ function loadCollapsed(): Record<string, boolean> {
 
 // ---------------- shared menus ----------------
 
-/** Board-level ⋯ menu (sidebar title, board header). */
-export function boardMenuItems(root: string, state: BoardState | null): MenuItem[] {
+/** Board settings menu (sidebar title, board header). The board header has its own
+ *  "Auto-pickup" toggle, so `inBoard` leaves that item out. */
+export function boardMenuItems(root: string, state: BoardState | null, opts: { inBoard?: boolean } = {}): MenuItem[] {
   const st = useTasks.getState();
   const s = state?.board.settings ?? { askOnTodo: false, maxAgents: 1, shared: false };
-  const project = projectForRoot(root);
-  const check = (on: boolean, label: string) => `${on ? "✓" : " "} ${label}`;
   return [
-    ...(project ? [{ label: "Open Board", action: () => openBoard(project.id) }, "sep" as const] : []),
-    { label: check(s.askOnTodo, "Ask to start Claude on new Todo tasks"), action: () => void st.saveSettings(root, { askOnTodo: !s.askOnTodo }) },
+    ...(opts.inBoard ? [] : [{ label: "Ask to Start Claude on New Todo Tasks", checked: s.askOnTodo, action: () => void st.saveSettings(root, { askOnTodo: !s.askOnTodo }) }, "sep" as const]),
+    { header: "Concurrent agents" },
     ...[1, 2, 3, 4].map((n) => ({
-      label: check(s.maxAgents === n, `Max ${n} concurrent agent${n > 1 ? "s" : ""}`),
+      label: `${n} at a time`,
+      checked: s.maxAgents === n,
       action: () => void st.saveSettings(root, { maxAgents: n }),
     })),
     "sep",
     {
-      label: check(s.shared, "Share board via git"),
-      hint: s.shared ? "" : ".git/info/exclude",
+      label: "Share Board via Git",
+      checked: s.shared,
+      title: s.shared ? undefined : "Off: .tcon/ is listed in .git/info/exclude",
       action: () => void st.saveSettings(root, { shared: !s.shared }),
     },
     {
-      label: "Install tCon task skill",
+      label: "Install tCon Task Skill",
+      checked: false,
       action: () =>
         void installSkill()
-          .then((paths) => st.setNotice(`Installed the tcon-tasks skill for Claude Code (${paths.length} location${paths.length === 1 ? "" : "s"}).`))
+          .then((paths) => st.setNotice(`Installed the tcon-tasks skill (${paths.length} location${paths.length === 1 ? "" : "s"}).`))
           .catch((e) => st.setNotice(`Couldn't install the skill: ${e}`, true)),
     },
-    { label: "Reload Tasks", action: () => void st.load(root) },
+    { label: "Reload Tasks", checked: false, action: () => void st.load(root) },
   ];
 }
 
@@ -67,16 +70,16 @@ export function taskMenuItems(root: string, task: Task, state: BoardState | null
   for (const c of state?.board.columns ?? []) {
     if (c.id !== task.status) items.push({ label: `Move to ${c.title}`, action: () => void st.move(root, task.id, c.id, Number.MAX_SAFE_INTEGER) });
   }
-  items.push("sep");
+  items.push("sep", { header: "Priority" });
   for (const p of PRIORITIES) {
-    items.push({ label: `${task.priority === p.id ? "✓" : " "} ${p.label}`, action: () => void st.update(root, task.id, { priority: p.id }) });
+    items.push({ label: p.label, checked: task.priority === p.id, action: () => void st.update(root, task.id, { priority: p.id }) });
   }
   items.push("sep", { label: "Delete Task", action: () => void confirmDelete(root, task) });
   return items;
 }
 
 export async function confirmDelete(root: string, task: Task) {
-  if (!window.confirm(`Delete ${task.id} "${task.title}"? This removes .tcon/tasks/${task.id}.md.`)) return;
+  if (!window.confirm(`Delete ${task.id} "${task.title}"? This deletes .tcon/tasks/${task.id}.md.`)) return;
   if (livePane(task)) await stopAgent(root, task.id);
   await useTasks.getState().remove(root, task.id);
 }
@@ -89,14 +92,12 @@ export function TasksTitleActions({ root }: { root: string }) {
   return (
     <span className="tk-title-actions">
       {project && (
-        <button className="sb-icon-btn" title="Open Board" onClick={() => openBoard(project.id)}>
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-            <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" /><path d="M6 2.5v11M10.5 2.5v6" />
-          </svg>
+        <button className="sb-icon-btn" title="Open board" aria-label="Open board" onClick={() => openBoard(project.id)}>
+          <Icon name="board" />
         </button>
       )}
-      <button className="sb-icon-btn" title="More actions" onClick={(e) => menu.open(e, boardMenuItems(root, state))}>
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="3.5" cy="8" r="1.2" /><circle cx="8" cy="8" r="1.2" /><circle cx="12.5" cy="8" r="1.2" /></svg>
+      <button className="sb-icon-btn" title="Board settings" aria-label="Board settings" onClick={(e) => menu.open(e, boardMenuItems(root, state))}>
+        <Icon name="more" />
       </button>
       {menu.element}
     </span>
@@ -138,7 +139,7 @@ export function QuickCapture({ root, column = "inbox", autoFocusAt }: { root: st
         <input
           ref={titleRef}
           className="tk-capture-input"
-          placeholder="Capture a task… ↵ to add"
+          placeholder="Add a task"
           value={title}
           spellCheck
           onChange={(e) => setTitle(e.target.value)}
@@ -162,7 +163,7 @@ export function QuickCapture({ root, column = "inbox", autoFocusAt }: { root: st
         <textarea
           ref={detailsRef}
           className="tk-capture-details"
-          placeholder="Details, who reported it, steps… (⌘↵ to add)"
+          placeholder="Details (Markdown). ⌘↵ to add"
           rows={3}
           value={details}
           onChange={(e) => setDetails(e.target.value)}
@@ -182,14 +183,14 @@ export function QuickCapture({ root, column = "inbox", autoFocusAt }: { root: st
           setShowDetails((v) => !v);
           if (!showDetails) requestAnimationFrame(() => detailsRef.current?.focus());
         }}>
-          {showDetails ? "− details" : "+ details"} <span className="tk-kbd">⇧↵</span>
+          <Icon name={showDetails ? "chevronDown" : "chevronRight"} size={12} />Details <span className="tk-kbd">⇧↵</span>
         </button>
         <span className="sb-spacer" />
         {flash ? <span className="tk-flash">{flash}</span> : (
-          <span className="tk-target" title="Column new tasks go to">
-            to
+          <span className="tk-target" title="Column for new tasks">
+            Add to
             {(["inbox", "todo"] as const).map((c) => (
-              <button key={c} className={`tk-target-btn${target === c ? " on" : ""}`} onClick={() => setTarget(c)}>
+              <button key={c} className={`tk-target-btn${target === c ? " on" : ""}`} aria-pressed={target === c} onClick={() => setTarget(c)}>
                 {c === "inbox" ? "Inbox" : "Todo"}
               </button>
             ))}
@@ -244,11 +245,7 @@ export function TasksView({ root }: { root: string }) {
         {error && <div className="sb-empty sb-error">{error}</div>}
         {!state && loading && <div className="sb-empty">Loading…</div>}
         {state && state.tasks.length === 0 && (
-          <div className="tk-empty">
-            <ClaudeMark size={18} />
-            <div>No tasks yet.</div>
-            <div className="tk-empty-sub">Type above and press ↵. Tasks live in <code>.tcon/tasks/</code>, so Claude can read and update them.</div>
-          </div>
+          <div className="sb-empty" title="Tasks are Markdown files in .tcon/tasks/">No tasks. Type one above and press ↵.</div>
         )}
         {state && state.tasks.length > 0 && state.board.columns.map((col) => {
           const ids = state.columns[col.id] ?? [];
@@ -265,9 +262,7 @@ export function TasksView({ root }: { root: string }) {
                 }}
                 onDrop={(e) => onDrop(e, col.id, isCollapsed ? 0 : ids.length)}
               >
-                <svg width="10" height="10" viewBox="0 0 10 10" className={`sb-chevron${isCollapsed ? "" : " sb-open"}`}>
-                  <path d="M3 1.5L7 5L3 8.5" fill="none" stroke="currentColor" strokeWidth="1.3" />
-                </svg>
+                <Icon name="chevronRight" size={14} className={`sb-chevron${isCollapsed ? "" : " sb-open"}`} />
                 <StatusIcon status={col.id} size={12} />
                 <span className="tk-group-title">{col.title}</span>
                 <span className="sb-count">{ids.length}</span>
@@ -350,7 +345,8 @@ function TaskRow(props: {
         {!active && task.status !== "done" && (
           <button
             className="sb-icon-btn tk-claude-btn"
-            title="Let Claude work on this"
+            title="Start Claude on this task"
+            aria-label="Start Claude on this task"
             onClick={(e) => {
               e.stopPropagation();
               void startAgent(root, task.id);
@@ -407,21 +403,17 @@ export function TasksSection({ root }: { root: string }) {
   return (
     <div className={`sb-section tk-scm-section${open ? " sb-section-open" : ""}`}>
       <div className="sb-section-header" onClick={toggle}>
-        <svg width="10" height="10" viewBox="0 0 10 10" className={`sb-chevron${open ? " sb-open" : ""}`}>
-          <path d="M3 1.5L7 5L3 8.5" fill="none" stroke="currentColor" strokeWidth="1.3" />
-        </svg>
+        <Icon name="chevronRight" size={14} className={`sb-chevron${open ? " sb-open" : ""}`} />
         <span className="sb-section-title">Tasks</span>
         <span className="sb-count">{openTasks.length}</span>
         <span className="sb-spacer" />
         <span className="sb-section-actions" onClick={(e) => e.stopPropagation()}>
-          <button className="sb-icon-btn" title="Quick add task (Tasks view)" onClick={quickAddTask}>
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M8 3v10M3 8h10" /></svg>
+          <button className="sb-icon-btn" title="Add task" aria-label="Add task" onClick={quickAddTask}>
+            <Icon name="plus" />
           </button>
           {project && (
-            <button className="sb-icon-btn" title="Open Board" onClick={() => openBoard(project.id)}>
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-                <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" /><path d="M6 2.5v11M10.5 2.5v6" />
-              </svg>
+            <button className="sb-icon-btn" title="Open board" aria-label="Open board" onClick={() => openBoard(project.id)}>
+              <Icon name="board" />
             </button>
           )}
         </span>

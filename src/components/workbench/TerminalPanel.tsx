@@ -8,6 +8,7 @@ import { TerminalPane } from "../TerminalPane";
 import { StatusDot } from "../StatusDot";
 import { useContextMenu, type MenuItem } from "../ContextMenu";
 import { layoutMenuItems } from "./layoutMenu";
+import { ClaudeMark, Icon } from "../icons";
 
 const DRAG_TYPE = "text/tcon-term-tab";
 
@@ -20,38 +21,6 @@ export async function closeTerminalTabConfirm(projectId: string, tabId: string) 
   st.closeTerminalTab(projectId, tabId);
 }
 
-const Icon = {
-  splitRight: (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2">
-      <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" /><path d="M8 2.5v11" />
-    </svg>
-  ),
-  splitDown: (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2">
-      <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" /><path d="M1.5 8h13" />
-    </svg>
-  ),
-  maximize: (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-      <path d="M4 10l4-4 4 4" />
-    </svg>
-  ),
-  restore: (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-      <path d="M4 6l4 4 4-4" />
-    </svg>
-  ),
-  close: (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
-      <path d="M4 4l8 8M12 4l-8 8" />
-    </svg>
-  ),
-  more: (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-      <circle cx="3.5" cy="8" r="1.2" /><circle cx="8" cy="8" r="1.2" /><circle cx="12.5" cy="8" r="1.2" />
-    </svg>
-  ),
-};
 
 export function TerminalPanel({ project }: { project: Project }) {
   const st = useWorkspace.getState();
@@ -110,19 +79,21 @@ export function TerminalPanel({ project }: { project: Project }) {
           {project.terminalTabs.map((tab, i) => (
             <TermTab key={tab.id} project={project} tab={tab} index={i} active={tab.id === activeTab?.id} />
           ))}
-          <button className="panel-new" title="New terminal (⇧⌘T)" onClick={() => st.addTerminal(project.id, { claude: false })}>+</button>
-          <button className="panel-new claude" title="New Claude Code terminal (⇧⌘C)" onClick={() => st.addTerminal(project.id, { claude: true })}>
-            ✳
+          <button className="icon-btn panel-new" title="New terminal (⇧⌘T)" aria-label="New terminal" onClick={() => st.addTerminal(project.id, { claude: false })}>
+            <Icon name="plus" />
+          </button>
+          <button className="icon-btn panel-new" title="New Claude terminal (⇧⌘C)" aria-label="New Claude terminal" onClick={() => st.addTerminal(project.id, { claude: true })}>
+            <ClaudeMark size={13} />
           </button>
         </div>
         <div className="panel-actions">
           {activeTab && (
             <>
-              <button className="icon-btn" title="Split right (⌘D)" onClick={() => split("row")}>{Icon.splitRight}</button>
-              <button className="icon-btn" title="Split down (⇧⌘D)" onClick={() => split("column")}>{Icon.splitDown}</button>
+              <button className="icon-btn" title="Split right (⌘D)" onClick={() => split("row")}><Icon name="splitRight" /></button>
+              <button className="icon-btn" title="Split down (⇧⌘D)" onClick={() => split("column")}><Icon name="splitDown" /></button>
             </>
           )}
-          <button className="icon-btn" title="Layout…" onClick={(e) => menu.open(e, layoutMenuItems(project.id))}>{Icon.more}</button>
+          <button className="icon-btn" title="Layout" aria-label="Layout" onClick={(e) => menu.open(e, layoutMenuItems(project.id))}><Icon name="more" /></button>
           {editors && (
             <>
               <button
@@ -130,9 +101,9 @@ export function TerminalPanel({ project }: { project: Project }) {
                 title={project.panelMaximized ? "Restore panel size (⇧⌘M)" : "Maximize panel (⇧⌘M)"}
                 onClick={() => st.togglePanelMaximized(project.id)}
               >
-                {project.panelMaximized ? Icon.restore : Icon.maximize}
+                <Icon name={project.panelMaximized ? "chevronDown" : "chevronUp"} />
               </button>
-              <button className="icon-btn" title="Hide panel (⇧⌘J)" onClick={() => st.togglePanel(project.id)}>{Icon.close}</button>
+              <button className="icon-btn" title="Hide panel (⇧⌘J)" onClick={() => st.togglePanel(project.id)}><Icon name="close" /></button>
             </>
           )}
         </div>
@@ -144,8 +115,8 @@ export function TerminalPanel({ project }: { project: Project }) {
           <div className="empty-state">
             <div>No terminals</div>
             <div className="row">
-              <button className="btn" onClick={() => st.addTerminal(project.id, { claude: false })}>New Terminal</button>
-              <button className="btn primary" onClick={() => st.addTerminal(project.id, { claude: true })}>New Claude Code</button>
+              <button className="btn" onClick={() => st.addTerminal(project.id, { claude: false })}>New terminal</button>
+              <button className="btn primary" onClick={() => st.addTerminal(project.id, { claude: true })}>New Claude terminal</button>
             </div>
           </div>
         )}
@@ -209,20 +180,21 @@ function TermTab({ project, tab, index, active }: { project: Project; tab: Termi
       onContextMenu={onContextMenu}
     >
       <StatusDot status={status} />
-      {claude && <span className="term-tab-claude" title="Claude Code">✳</span>}
+      {claude && <ClaudeMark size={11} />}
       <span className="term-tab-title">{title}</span>
       {ids.length > 1 && <span className="term-tab-count" title={`${ids.length} split terminals`}>
-        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" /><path d="M8 2.5v11" /></svg>
+        <Icon name="splitRight" size={12} />
         {ids.length}
       </span>}
       {progress != null && <span className="pane-progress">{progress}%</span>}
       <button
         className="term-tab-close"
         title="Close (⌘W)"
+        aria-label="Close terminal"
         onMouseDown={(e) => e.stopPropagation()}
         onClick={() => void closeTerminalTabConfirm(project.id, tab.id)}
       >
-        {Icon.close}
+        <Icon name="close" size={14} />
       </button>
     </div>
     {menu.element}

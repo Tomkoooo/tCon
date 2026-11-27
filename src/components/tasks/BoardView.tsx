@@ -12,6 +12,8 @@ import { TaskDrawer } from "./TaskDrawer";
 import {
   AgentChip, ClaudeMark, Labels, PriorityIcon, StatusIcon, TASK_DRAG, adjustedIndex, dropIndexFor, readDrag, relTime, type DragPayload,
 } from "./parts";
+import { Icon } from "../icons";
+import { Toggle } from "../ui";
 import "./tasks.css";
 
 const isTyping = (t: EventTarget | null) => {
@@ -173,23 +175,20 @@ export function BoardView({ project }: { project: Project }) {
     <div className="tkb" ref={rootRef} tabIndex={0} onKeyDown={onKeyDown}>
       <div className="tkb-header">
         <div className="tkb-title">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-            <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" /><path d="M6 2.5v11M10.5 2.5v6" />
-          </svg>
-          <span>{project.name}</span>
-          <span className="tkb-sub">Tasks</span>
+          <span className="tkb-name">{project.name}</span>
         </div>
         <div className="tkb-stats">
           <span>{counts.open} open</span>
-          {counts.agents > 0 && <span className="tkb-stat-agents"><ClaudeMark size={10} /> {counts.agents} agent{counts.agents > 1 ? "s" : ""} running</span>}
+          {counts.agents > 0 && <span className="tkb-stat-agents"><ClaudeMark size={11} />{counts.agents} agent{counts.agents > 1 ? "s" : ""} running</span>}
           {counts.queued > 0 && <span>{counts.queued} queued</span>}
         </div>
         <span className="sb-spacer" />
         <div className="tkb-filter">
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5L14 14" /></svg>
+          <Icon name="search" size={14} />
           <input
             ref={filterRef}
-            placeholder="Filter  /"
+            placeholder="Filter"
+            aria-label="Filter tasks"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             onKeyDown={(e) => {
@@ -201,25 +200,25 @@ export function BoardView({ project }: { project: Project }) {
           />
         </div>
         {state && (
-          <button
-            className={`tkb-toggle${state.board.settings.askOnTodo ? " on" : ""}`}
-            title="When a task enters Todo, ask whether Claude should start working on it"
-            onClick={() => void useTasks.getState().saveSettings(root, { askOnTodo: !state.board.settings.askOnTodo })}
-          >
-            <span className="tkb-switch" /> Auto-pickup
-          </button>
+          <span className="tkb-autopickup" title="When a task moves to Todo, ask whether Claude should start on it">
+            <Toggle
+              checked={state.board.settings.askOnTodo}
+              onChange={(v) => void useTasks.getState().saveSettings(root, { askOnTodo: v })}
+              label="Auto-pickup"
+            />
+          </span>
         )}
-        <button className="tkb-btn" title="New task (N)" onClick={() => setAdding(columns[0]?.id ?? "inbox")}>
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M8 3v10M3 8h10" /></svg>
-          New
+        <button className="btn small primary" title="New task (N)" onClick={() => setAdding(columns[0]?.id ?? "inbox")}>
+          <Icon name="plus" size={14} />
+          New task
         </button>
-        <button className="sb-icon-btn" title="Board settings" onClick={(e) => menu.open(e, boardMenuItems(root, state))}>
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="3.5" cy="8" r="1.2" /><circle cx="8" cy="8" r="1.2" /><circle cx="12.5" cy="8" r="1.2" /></svg>
+        <button className="icon-btn" title="Board settings" aria-label="Board settings" onClick={(e) => menu.open(e, boardMenuItems(root, state, { inBoard: true }))}>
+          <Icon name="more" />
         </button>
       </div>
 
       {error && <div className="tkb-error">{error}</div>}
-      {!state && loading && <div className="tkb-empty">Loading board…</div>}
+      {!state && loading && <div className="tkb-empty">Loading…</div>}
 
       {state && (
         <div className="tkb-columns" onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setDrop(null)}>
@@ -241,8 +240,8 @@ export function BoardView({ project }: { project: Project }) {
                   <span className="tkb-col-title">{col.title}</span>
                   <span className="tkb-col-count">{ids.length}</span>
                   <span className="sb-spacer" />
-                  <button className="sb-icon-btn" title={`Add to ${col.title}`} onClick={() => setAdding(col.id)}>
-                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M8 3v10M3 8h10" /></svg>
+                  <button className="sb-icon-btn" title={`Add to ${col.title}`} aria-label={`Add to ${col.title}`} onClick={() => setAdding(col.id)}>
+                    <Icon name="plus" size={14} />
                   </button>
                 </div>
                 <div className="tkb-cards">
@@ -306,7 +305,7 @@ export function BoardView({ project }: { project: Project }) {
                   })}
                   {ids.length === 0 && adding !== col.id && (
                     <button className="tkb-col-empty" onClick={() => setAdding(col.id)}>
-                      {filter ? "No matches" : col.id === "inbox" ? "Drop notes here, or press N" : "No tasks"}
+                      {filter ? "No matches" : "No tasks"}
                     </button>
                   )}
                 </div>
@@ -376,12 +375,12 @@ function Card(props: {
           <span className="sb-spacer" />
           {hasNotes && (
             <span className="tkb-card-icon" title="Has notes">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M3 4h10M3 8h10M3 12h6" /></svg>
+              <Icon name="notes" size={12} />
             </span>
           )}
           {task.commits.length > 0 && (
             <span className="tkb-card-icon" title={task.commits.join(", ")}>
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="8" cy="8" r="2.5" /><path d="M1 8h4.5M10.5 8H15" /></svg>
+              <Icon name="commit" size={12} />
               {task.commits.length}
             </span>
           )}
@@ -399,7 +398,7 @@ function InlineAdd({ onAdd, onCancel }: { onAdd(title: string, keepOpen: boolean
       <textarea
         autoFocus
         rows={2}
-        placeholder="Task title… ↵ add · ⇧↵ add another · Esc cancel"
+        placeholder="Task title (↵ add, ⇧↵ add another)"
         value={v}
         onChange={(e) => setV(e.target.value)}
         onBlur={() => !v.trim() && onCancel()}

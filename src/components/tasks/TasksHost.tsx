@@ -38,7 +38,7 @@ export function TasksHost() {
         const project = Object.values(projects).find((x) => x.rootPath.replace(/\/+$/, "") === p.root);
         return (
           <div key={p.key} className="tk-toast">
-            <ClaudeMark size={16} />
+            <ClaudeMark size={14} />
             <div className="tk-toast-body">
               <div className="tk-toast-title">Start Claude on {p.taskId}?</div>
               <div className="tk-toast-sub" title={p.title}>
@@ -48,7 +48,7 @@ export function TasksHost() {
             </div>
             <div className="tk-toast-actions">
               <button
-                className="tkd-btn tkd-btn-claude"
+                className="btn small primary"
                 onClick={() => {
                   useTasks.getState().dismissPrompt(p.key);
                   void startAgent(p.root, p.taskId);
@@ -56,7 +56,7 @@ export function TasksHost() {
               >
                 Start
               </button>
-              <button className="tkd-btn" onClick={() => useTasks.getState().dismissPrompt(p.key)}>Not now</button>
+              <button className="btn small ghost" onClick={() => useTasks.getState().dismissPrompt(p.key)}>Not now</button>
             </div>
           </div>
         );

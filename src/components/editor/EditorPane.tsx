@@ -15,6 +15,7 @@ import type { FsChangedEvent } from "../../types";
 import { useWorkspace } from "../../store/workspace";
 import { useIsDark } from "../../theme";
 import { FileIcon } from "../FileIcon";
+import { Icon } from "../icons";
 import { editorSavers } from "./editorActions";
 import { isMarkdownPath, languageFor } from "./languages";
 import "./editor.css";
@@ -46,7 +47,7 @@ function Breadcrumb({ path, root, children }: { path: string; root: string; chil
           <span key={i} className="ed-crumb">
             {i === parts.length - 1 && <FileIcon name={part} size={14} />}
             <span className={i === parts.length - 1 ? "ed-crumb-last" : undefined}>{part}</span>
-            {i < parts.length - 1 && <span className="ed-crumb-sep">›</span>}
+            {i < parts.length - 1 && <Icon name="chevronRight" size={12} className="ed-crumb-sep" />}
           </span>
         ))}
       </div>
@@ -397,8 +398,8 @@ function DiffView({ root, file, staged }: { root: string; file: string | null; s
   return (
     <div className="ed-root">
       <Breadcrumb path={file ? `${root}/${file}` : root} root={root}>
-        <span className="ed-dim">{file ? "" : "all files · "}{staged ? "staged" : "working tree"}</span>
-        <button className="ed-btn" onClick={load} title="Reload diff">Reload</button>
+        <span className="ed-dim">{file ? "" : "All files · "}{staged ? "Staged" : "Working tree"}</span>
+        <button className="ed-btn" onClick={load}>Reload</button>
       </Breadcrumb>
       <div className="ed-body">
         {error && <div className="ed-message ed-message-error">{error}</div>}

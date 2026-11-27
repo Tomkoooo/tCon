@@ -1,6 +1,7 @@
 // Small, theme-aware form controls shared by Settings, New Project and Project Settings.
 // Everything is styled from the theme tokens in styles.css, so it follows any color theme.
 import { useEffect, useState } from "react";
+import { Icon } from "./icons";
 
 /** Native <select> (keyboard + optgroups for free) with consistent styling and a chevron. */
 export function Select({
@@ -19,7 +20,7 @@ export function Select({
       <select value={value} disabled={disabled} aria-label={ariaLabel} onChange={(e) => onChange(e.target.value)}>
         {children}
       </select>
-      <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden><path d="M2 3.5l3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>
+      <Icon name="chevronDown" size={12} />
     </span>
   );
 }
@@ -110,7 +111,7 @@ export function ColorPicker({ value, onChange, palette }: { value?: string; onCh
       ))}
       <label className="swatch-custom" title="Custom color">
         <input type="color" value={value ?? "#6aa7ff"} onChange={(e) => onChange(e.target.value)} />
-        <span style={{ background: value && !palette.includes(value) ? value : undefined }}>+</span>
+        <span style={{ background: value && !palette.includes(value) ? value : undefined }}><Icon name="plus" size={12} /></span>
       </label>
     </div>
   );

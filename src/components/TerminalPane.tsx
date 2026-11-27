@@ -3,6 +3,7 @@ import { terminals } from "../terminal/registry";
 import { useWorkspace } from "../store/workspace";
 import type { Pane, PaneStatus } from "../types";
 import { StatusDot } from "./StatusDot";
+import { ClaudeMark, Icon } from "./icons";
 
 interface Props {
   projectId: string;
@@ -46,27 +47,27 @@ export function TerminalPane({ projectId, pane, status, focused, showHeader, acc
       {showHeader && (
       <div className="pane-header">
         <StatusDot status={status} />
-        {pane.isClaude && <span className="pane-claude-tag">claude</span>}
+        {pane.isClaude && <ClaudeMark size={11} />}
         <span className="pane-title" title={`${pane.title}\n${pane.cwd}`}>
           {status?.title || pane.title}
         </span>
         {msg && <span className="pane-msg" title={msg}>{msg}</span>}
         {showProgress && <span className="pane-progress">{status!.progress}%</span>}
         <button className="icon-btn" title="Split right (⌘D)" onClick={() => { focusPane(projectId, pane.id); addTerminal(projectId, { claude: false, split: "row" }); }}>
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" /><path d="M8 2.5v11" /></svg>
+          <Icon name="splitRight" size={14} />
         </button>
         <button className="icon-btn" title="Split down (⇧⌘D)" onClick={() => { focusPane(projectId, pane.id); addTerminal(projectId, { claude: false, split: "column" }); }}>
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" /><path d="M1.5 8h13" /></svg>
+          <Icon name="splitDown" size={14} />
         </button>
-        <button className="icon-btn" title="Kill terminal (⌘W)" onClick={() => closePane(projectId, pane.id)}>×</button>
+        <button className="icon-btn" title="Kill terminal (⌘W)" aria-label="Kill terminal" onClick={() => closePane(projectId, pane.id)}><Icon name="close" size={14} /></button>
       </div>
       )}
       <div className="term-container" ref={ref} />
       {pane.exited && (
         <div className="pane-exited">
           <span>Process exited{pane.exitCode != null ? ` (${pane.exitCode})` : ""}</span>
-          <button className="btn primary" onClick={() => restartPane(pane.id)}>Restart</button>
-          <button className="btn" onClick={() => closePane(projectId, pane.id)}>Close</button>
+          <button className="btn small primary" onClick={() => restartPane(pane.id)}>Restart</button>
+          <button className="btn small" onClick={() => closePane(projectId, pane.id)}>Close</button>
         </div>
       )}
     </div>

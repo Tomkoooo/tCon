@@ -15,6 +15,7 @@ import { AccountAvatar, accountOrg } from "./AccountChip";
 import { AppearanceSection, KeybindingsSection, TerminalSection, openConfigInEditor } from "./AppearanceSettings";
 import { SettingRow, SettingsGroup, SettingsSearch, SettingsSection } from "./settingsKit";
 import { Badge, CommitInput, Segmented } from "./ui";
+import { Icon } from "./icons";
 
 const SECTIONS = [
   { id: "accounts", label: "Accounts", icon: "M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm-5.5 6c.4-2.6 2.7-4.5 5.5-4.5s5.1 1.9 5.5 4.5" },
@@ -48,7 +49,7 @@ export function ProfilesModal() {
       className="settings-modal"
       onClose={() => setModal(null)}
       actions={
-        <button className="btn small ghost" title="Open ~/.tcon/settings.json" onClick={() => openConfigInEditor("settings.json")}>
+        <button className="btn small ghost" onClick={() => openConfigInEditor("settings.json")}>
           Open settings.json
         </button>
       }
@@ -74,7 +75,7 @@ export function ProfilesModal() {
                 setSection(s.id);
               }}
             >
-              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden><path d={s.icon} fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round" /></svg>
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden><path d={s.icon} fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" strokeLinecap="round" /></svg>
               {s.label}
             </button>
           ))}
@@ -88,7 +89,7 @@ export function ProfilesModal() {
             {show("keyboard") && <KeybindingsSection />}
             {show("advanced") && <AdvancedSection />}
           </SettingsSearch.Provider>
-          {q && <div className="settings-empty">No settings match “{q}”.</div>}
+          {q && <div className="settings-empty">No settings match “{q}”</div>}
         </div>
       </div>
     </Modal>
@@ -110,22 +111,17 @@ function AccountsSection() {
     <SettingsSection
       id="accounts"
       title="Accounts"
-      description="Each Claude account keeps its own saved login, so you can switch between them without logging in again. The active account is used by every new Claude session, in every project."
+      description="Each account keeps its own saved login. New Claude sessions in every project use the active account."
     >
       <SettingRow label="Claude accounts" keywords="account login logout switch email plan subscription claude config dir profile" stacked hideLabel modified={false}>
         <div className="account-cards">
           {accounts.length === 1 && (
             <div className="onboard-card">
-              <div className="onboard-title">Work with more than one Claude account?</div>
-              <ol className="onboard-steps">
-                <li>Click <b>Add account</b> and sign in once in the browser.</li>
-                <li>tCon stores that login in its own config folder, next to your default one.</li>
-                <li>Switch here or from the account chip in the title bar — no new login needed.</li>
-              </ol>
-              <div className="row">
-                <button className="btn primary" disabled={!hasProject} onClick={add}>Add account</button>
-                {!hasProject && <span className="hint">Open a project first — the login runs in one of its terminals.</span>}
+              <div className="onboard-text">
+                <span className="onboard-title">Add another account</span>
+                <span className="hint">{hasProject ? "Sign in once, then switch without logging in again." : "Open a project first. The login runs in one of its terminals."}</span>
               </div>
+              <button className="btn small" disabled={!hasProject} onClick={add}>Add account</button>
             </div>
           )}
           {accounts.map((a) => (
@@ -133,18 +129,16 @@ function AccountsSection() {
           ))}
           <div className="row account-actions">
             {accounts.length > 1 && (
-              <button className="btn" disabled={!hasProject} title={hasProject ? undefined : "Open a project first"} onClick={add}>
-                + Add account
+              <button className="btn small" disabled={!hasProject} title={hasProject ? undefined : "Open a project first"} onClick={add}>
+                <Icon name="plus" size={14} />
+                Add account
               </button>
             )}
-            <button className="btn ghost" disabled={refreshing} onClick={() => void useAccounts.getState().refresh()}>
+            <button className="btn small ghost" disabled={refreshing} onClick={() => void useAccounts.getState().refresh()}>
               {refreshing ? "Refreshing…" : "Refresh status"}
             </button>
           </div>
-          <p className="hint">
-            Switching affects new Claude sessions. Sessions that are already running keep their account; after a switch tCon offers to restart the idle ones on the
-            new account, resuming their conversation.
-          </p>
+          <p className="hint">Running sessions keep their account. After a switch, tCon offers to restart idle ones on the new account.</p>
         </div>
       </SettingRow>
     </SettingsSection>
@@ -175,13 +169,12 @@ function AccountCard({ account, hasProject }: { account: Account; hasProject: bo
       <div className="account-card-main">
         <div className="account-card-title">
           <span className="account-card-name">{loggedIn ? name : account.configDir ? "Not logged in" : "Default account"}</span>
-          {plan && <Badge tone="claude">{plan}</Badge>}
           {active && <Badge tone="accent">Active</Badge>}
         </div>
         <div className="account-card-sub">
           <span className={`state-dot ${loggedIn ? "ok" : "warn"}`} />
-          {st === undefined ? "Checking…" : loggingIn ? "Login in progress…" : loggedIn ? org ?? "Logged in" : error ? "Status unavailable" : "Logged out"}
-          <span className="sep">·</span>
+          {st === undefined ? "Checking…" : loggingIn ? "Logging in…" : loggedIn ? [plan, org ?? "Logged in"].filter(Boolean).join(" · ") : error ? "Status unavailable" : "Logged out"}
+          <span>·</span>
           <code title={account.configDir ?? "~/.claude"}>{dir}</code>
         </div>
         {error && <div className="settings-error">{error}</div>}
@@ -294,7 +287,7 @@ function AdvancedSection() {
       {errs.map((e) => (
         <div key={e} className="settings-error">{e}</div>
       ))}
-      <SettingRow label="Configuration files" description={<>Everything on these pages lives in <code>{dir ? dir.replace(/^\/Users\/[^/]+/, "~") : "~/.tcon"}</code> and reloads when the files change.</>} keywords="settings.json keybindings.json custom.css json config folder" stacked modified={false}>
+      <SettingRow label="Configuration files" description={<>Stored in <code>{dir ? dir.replace(/^\/Users\/[^/]+/, "~") : "~/.tcon"}</code>. Edits apply on save.</>} keywords="settings.json keybindings.json custom.css json config folder" stacked modified={false}>
         <div className="row wrap">
           <button className="btn" onClick={() => openConfigInEditor("settings.json")}>settings.json</button>
           <button className="btn" onClick={() => openConfigInEditor("keybindings.json")}>keybindings.json</button>
@@ -323,7 +316,7 @@ function AdvancedSection() {
             keywords="profiles environment env legacy CLAUDE_CONFIG_DIR"
             stacked
             modified={false}
-            description="Replaced by Accounts. Projects that still use a profile keep getting its environment variables; move them into Project Settings → Environment, then delete the profile here."
+            description="Replaced by Accounts. Projects using a profile still get its variables; move them to Project Settings → Environment, then delete the profile."
           >
             <div className="legacy-list">
               {profiles.map((p) => {

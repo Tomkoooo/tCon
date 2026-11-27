@@ -3,29 +3,7 @@ import { useWorkspace } from "../../store/workspace";
 import { useContextMenu } from "../ContextMenu";
 import { layoutMenuItems } from "./layoutMenu";
 import { useTasks } from "../../tasks/store";
-
-const FilesIcon = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
-    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
-    <path d="M14 3v5h5" />
-  </svg>
-);
-const GitIcon = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <circle cx="6" cy="5" r="2" /><circle cx="6" cy="19" r="2" /><circle cx="18" cy="8" r="2" />
-    <path d="M6 7v10M18 10c0 4-6 3-11.2 7.5" />
-  </svg>
-);
-const TasksIcon = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
-    <rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16M15 4v9" /><path d="M5.5 8h1.5M11.5 8h1.5M11.5 11h1.5" strokeLinecap="round" />
-  </svg>
-);
-const LayoutIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16M9 14h12" />
-  </svg>
-);
+import { Icon } from "../icons";
 
 export function ActivityBar({ project }: { project: Project }) {
   const updateProject = useWorkspace((s) => s.updateProject);
@@ -41,24 +19,24 @@ export function ActivityBar({ project }: { project: Project }) {
 
   return (
     <div className="activitybar">
-      <button className={`ab-btn${on("files") ? " on" : ""}`} title="Explorer (⇧⌘E)" onClick={() => toggle("files")}>
-        <FilesIcon />
+      <button className={`ab-btn${on("files") ? " on" : ""}`} title="Explorer (⇧⌘E)" aria-label="Explorer" onClick={() => toggle("files")}>
+        <Icon name="files" size={22} />
       </button>
-      <button className={`ab-btn${on("git") ? " on" : ""}`} title="Source Control (⇧⌘G)" onClick={() => toggle("git")}>
-        <GitIcon />
+      <button className={`ab-btn${on("git") ? " on" : ""}`} title="Source Control (⇧⌘G)" aria-label="Source Control" onClick={() => toggle("git")}>
+        <Icon name="branch" size={22} />
         {changes > 0 && <span className="ab-badge">{changes > 99 ? "99+" : changes}</span>}
       </button>
-      <button className={`ab-btn${on("tasks") ? " on" : ""}`} title="Tasks" onClick={() => toggle("tasks")}>
-        <TasksIcon />
+      <button className={`ab-btn${on("tasks") ? " on" : ""}`} title="Tasks" aria-label="Tasks" onClick={() => toggle("tasks")}>
+        <Icon name="board" size={22} />
         {openTasks > 0 && (
-          <span className="ab-badge" style={blockedTasks ? { background: "var(--warn)" } : undefined} title={blockedTasks ? `${blockedTasks} agent(s) need you` : undefined}>
+          <span className={`ab-badge${blockedTasks ? " warn" : ""}`} title={blockedTasks ? `${blockedTasks} agent${blockedTasks > 1 ? "s" : ""} need${blockedTasks > 1 ? "" : "s"} you` : undefined}>
             {openTasks > 99 ? "99+" : openTasks}
           </span>
         )}
       </button>
       <span style={{ flex: 1 }} />
-      <button className="ab-btn" title="Layout" onClick={(e) => menu.open(e, layoutMenuItems(project.id))}>
-        <LayoutIcon />
+      <button className="ab-btn" title="Layout" aria-label="Layout" onClick={(e) => menu.open(e, layoutMenuItems(project.id))}>
+        <Icon name="layout" size={20} />
       </button>
       {menu.element}
     </div>
