@@ -1,3 +1,4 @@
+mod agent_worktree;
 mod appicon;
 mod background;
 mod browser;
@@ -188,6 +189,10 @@ pub fn run() {
             appicon::app_set_icon,
             appicon::app_icon_preview,
             clipboard::clipboard_file_paths,
+            agent_worktree::task_worktree_add,
+            agent_worktree::task_worktree_remove,
+            agent_worktree::task_worktree_merge,
+            agent_worktree::task_worktree_pr,
             pty_spawn,
             pty_write,
             pty_resize,

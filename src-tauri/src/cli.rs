@@ -54,7 +54,7 @@ pub struct CmdOutput {
     pub stderr: String,
 }
 
-fn run(bin: &str, args: &[String], cwd: Option<&str>, env: &HashMap<String, String>) -> Result<CmdOutput, String> {
+pub(crate) fn run(bin: &str, args: &[String], cwd: Option<&str>, env: &HashMap<String, String>) -> Result<CmdOutput, String> {
     let exe = which(bin).ok_or_else(|| format!("`{bin}` not found on PATH"))?;
     let mut cmd = Command::new(exe);
     cmd.args(args)
@@ -81,7 +81,7 @@ fn run(bin: &str, args: &[String], cwd: Option<&str>, env: &HashMap<String, Stri
 }
 
 /// Run git and turn a non-zero exit into an error carrying git's message.
-fn git(cwd: &str, args: &[&str]) -> Result<String, String> {
+pub(crate) fn git(cwd: &str, args: &[&str]) -> Result<String, String> {
     let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
     let out = run("git", &args, Some(cwd), &HashMap::new())?;
     if out.ok {

@@ -7,7 +7,7 @@ import {
 import { useTasks } from "../../tasks/store";
 import type { AutoPickup, BoardSettings, BoardState, PickupPosition } from "../../tasks/types";
 import { Icon } from "../icons";
-import { Segmented, Select, Toggle } from "../ui";
+import { CommitInput, Segmented, Select, Toggle } from "../ui";
 import { PriorityIcon } from "./parts";
 
 const QUEUE_DRAG = "text/tcon-queue";
@@ -57,7 +57,7 @@ export function RunQueuePanel({ root, state, onClose }: { root: string; state: B
     const t = byId.get(id);
     return t && (t.agent === "idle" || t.agent === "done" || t.agent === "failed" || !t.agent);
   });
-  const parallel = s.runMode !== "rolling" || s.maxAgents > 1;
+  const parallel = (s.runMode !== "rolling" || s.maxAgents > 1) && s.isolation !== "worktree";
 
   const onDrop = (e: React.DragEvent, index: number) => {
     const id = e.dataTransfer.getData(QUEUE_DRAG);
@@ -126,12 +126,30 @@ export function RunQueuePanel({ root, state, onClose }: { root: string; state: B
             </Select>
           </>
         )}
+        <span className="tkq-label" title="Each agent works on its own branch (tcon/T-n) in a separate git worktree">Isolation</span>
+        <Segmented<BoardSettings["isolation"]>
+          ariaLabel="Isolation"
+          value={s.isolation}
+          onChange={(v) => save({ isolation: v })}
+          options={[
+            { value: "none", label: "Same checkout" },
+            { value: "worktree", label: "Worktree per task", title: "Branch tcon/T-n in ~/.tcon/worktrees; merge or open a PR from the task" },
+          ]}
+        />
+        {s.isolation === "worktree" && (
+          <>
+            <span className="tkq-label" title="Runs in each new worktree before the agent starts">Worktree setup</span>
+            <CommitInput value={s.worktreeSetup} placeholder="e.g. npm ci" onCommit={(v) => save({ worktreeSetup: v })} />
+            <span className="tkq-label">Share node_modules</span>
+            <Toggle checked={s.linkNodeModules} onChange={(v) => save({ linkNodeModules: v })} />
+          </>
+        )}
       </div>
 
       {parallel && (
         <div className="tkq-warn">
           Several agents share one working tree and branch, so their changes and commits can mix.
-          Use <b>Parallel-safe</b> with triaged plans, or one agent at a time.
+          Use <b>Worktree per task</b>, <b>Parallel-safe</b> with triaged plans, or one agent at a time.
         </div>
       )}
 

@@ -54,11 +54,17 @@ export function agentView(task: Task, pane: PaneStatus | undefined, alive: boole
   return { kind: "none", label: "", title: "" };
 }
 
-export function buildPrompt(task: Task, root: string, mode: AgentMode = "work"): string {
+export interface WorktreeInfo { path: string; branch: string; base: string }
+
+export function buildPrompt(task: Task, root: string, mode: AgentMode = "work", wt?: WorktreeInfo): string {
   if (mode === "plan") return buildPlanPrompt([task], root);
   const id = task.id;
+  const where = wt
+    ? `You are in a separate git worktree at ${wt.path} on branch ${wt.branch} (made from ${wt.base}); make and commit your changes there, and don't merge or push.
+       The task file is NOT in this worktree: edit it at its absolute path ${root}/.tcon/tasks/${id}.md, and read the protocol at ${root}/.tcon/PROTOCOL.md.`
+    : `The task file is .tcon/tasks/${id}.md in ${root}.`;
   return oneLine(`
-    Work on tCon task ${id} ("${oneLine(task.title)}"). The task file is .tcon/tasks/${id}.md in ${root}.
+    Work on tCon task ${id} ("${oneLine(task.title)}"). ${where}
     Follow the tCon task protocol in .tcon/PROTOCOL.md (the same protocol as the tcon-tasks skill):
     claim the task, read it and inspect the relevant code, write a plan under ## Plan, implement it,
     verify with the project's tests/typecheck/build and record the results under ## Verification,
@@ -155,7 +161,25 @@ async function launchInner(root: string, task: Task, mode: AgentMode = "work"): 
   const ws = useWorkspace.getState();
   const model = projectModel(project);
   const modelFlag = model === "default" ? "" : ` --model ${shq(model)}`;
-  const cmd = `cd ${shq(project.rootPath)} && claude${modelFlag} ${shq(buildPrompt(task, project.rootPath, mode))}`;
+  // Isolation: a work agent gets its own branch and worktree (outside the repo).
+  let wt: WorktreeInfo | undefined;
+  const settings = useTasks.getState().boards[trim(root)]?.state?.board.settings;
+  if (mode === "work" && settings?.isolation === "worktree" && hasBackend()) {
+    try {
+      wt = await tasksApi.worktreeAdd(project.rootPath, task.id);
+    } catch (e) {
+      useTasks.getState().setNotice(`${task.id}: couldn't create a worktree (${e}). Not started.`, true);
+      await useTasks.getState().update(root, task.id, { agent: "failed", log: `Couldn't create a git worktree: ${e}` });
+      return false;
+    }
+  }
+  const prep: string[] = [`cd ${shq(wt?.path ?? project.rootPath)}`];
+  if (wt && settings?.linkNodeModules) {
+    const nm = `${trim(project.rootPath)}/node_modules`;
+    prep.push(`{ [ -d ${shq(nm)} ] && [ ! -e node_modules ] && ln -s ${shq(nm)} node_modules; true; }`);
+  }
+  if (wt && settings?.worktreeSetup.trim()) prep.push(`{ ${settings.worktreeSetup.trim()} ; }`);
+  const cmd = `${prep.join(" && ")} && claude${modelFlag} ${shq(buildPrompt(task, project.rootPath, mode, wt))}`;
   const paneId = ws.addTerminal(project.id, {
     claude: true,
     command: cmd,
@@ -169,7 +193,8 @@ async function launchInner(root: string, task: Task, mode: AgentMode = "work"): 
     return true;
   }
   const status = task.status === "inbox" || task.status === "todo" ? "in-progress" : undefined;
-  await useTasks.getState().update(root, task.id, { agent: "running", paneId, status, log: "Claude agent started in tCon" });
+  const wtPatch = wt ? { worktree: wt.path, branch: wt.branch } : {};
+  await useTasks.getState().update(root, task.id, { agent: "running", paneId, status, ...wtPatch, log: wt ? `Claude agent started in tCon (worktree ${wt.branch})` : "Claude agent started in tCon" });
   return true;
 }
 

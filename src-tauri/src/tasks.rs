@@ -43,6 +43,8 @@ pub struct Task {
     pub pane_id: String,
     /// Tasks that must reach Review/Done before this one may start (`depends: [T-3]`).
     pub depends: Vec<String>,
+    /// Git worktree the agent works in (isolation: worktree), "" = the main checkout.
+    pub worktree: String,
     /// Frontmatter keys we don't know, kept verbatim (key, raw value).
     pub extra: Vec<(String, String)>,
     /// Body text before the agent sections.
@@ -78,6 +80,12 @@ pub struct BoardSettings {
     pub batch_size: u32,
     /// Queue stopped: running agents finish, no new ones start.
     pub paused: bool,
+    /// "none" | "worktree": each agent gets its own branch + git worktree.
+    pub isolation: String,
+    /// Shell command run in a new worktree before the agent starts (e.g. `npm ci`).
+    pub worktree_setup: String,
+    /// Symlink the main checkout's node_modules into new worktrees.
+    pub link_node_modules: bool,
     /// Share `.tcon/` via git (no `.git/info/exclude` entry).
     pub shared: bool,
 }
@@ -93,6 +101,9 @@ impl Default for BoardSettings {
             run_mode: "rolling".into(),
             batch_size: 2,
             paused: false,
+            isolation: "none".into(),
+            worktree_setup: String::new(),
+            link_node_modules: true,
             shared: false,
         }
     }
@@ -110,6 +121,7 @@ impl BoardSettings {
         self.auto_pickup = pick(&self.auto_pickup, &["off", "ask", "auto"]);
         self.pickup_position = pick(&self.pickup_position, &["end", "front", "priority"]);
         self.run_mode = pick(&self.run_mode, &["rolling", "batch", "parallel-safe"]);
+        self.isolation = pick(&self.isolation, &["none", "worktree"]);
         self.max_agents = self.max_agents.clamp(1, 16);
         self.batch_size = self.batch_size.clamp(1, 16);
         self
@@ -172,6 +184,7 @@ pub struct TaskPatch {
     pub branch: Option<String>,
     pub pane_id: Option<String>,
     pub depends: Option<Vec<String>>,
+    pub worktree: Option<String>,
     pub description: Option<String>,
     /// Line appended to `## Progress log`.
     pub log: Option<String>,
@@ -419,6 +432,7 @@ pub fn parse_task(text: &str, fallback_id: &str) -> Task {
                     "commits" => t.commits = parse_list(&raw),
                     "pane" | "paneId" => t.pane_id = unquote(&raw),
                     "depends" | "dependsOn" => t.depends = parse_list(&raw),
+                    "worktree" => t.worktree = unquote(&raw),
                     _ => t.extra.push((key, raw)),
                 }
             }
@@ -469,6 +483,9 @@ pub fn serialize_task(t: &Task) -> String {
     kv(&mut s, "pane", &quote(&t.pane_id));
     if !t.depends.is_empty() {
         kv(&mut s, "depends", &fmt_list(&t.depends));
+    }
+    if !t.worktree.is_empty() {
+        kv(&mut s, "worktree", &quote(&t.worktree));
     }
     for (k, v) in &t.extra {
         kv(&mut s, k, v);
@@ -768,6 +785,9 @@ fn update_locked(root: &str, id: &str, patch: TaskPatch) -> Result<Task, String>
     if let Some(v) = patch.pane_id {
         t.pane_id = v;
     }
+    if let Some(v) = patch.worktree {
+        t.worktree = v;
+    }
     if let Some(v) = patch.depends {
         t.depends = v.into_iter().map(|d| d.trim().to_string()).filter(|d| !d.is_empty()).collect();
     }
@@ -1056,6 +1076,7 @@ mod tests {
             commits: vec!["abc1234".into()],
             pane_id: "p1".into(),
             depends: vec!["T-1".into()],
+            worktree: "/Users/x/.tcon/worktrees/p-1/T-3".into(),
             extra: vec![("estimate".into(), "3".into())],
             description: "Users report a loop.\n\n## Notes from the meeting\n- happens on Safari".into(),
             sections: "## Plan\n1. look\n\n## Progress log\n- 2026-11-27 10:00 — Created\n\n## Verification".into(),

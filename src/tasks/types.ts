@@ -20,6 +20,8 @@ export interface Task {
   paneId: string;
   /** tasks that must reach Review/Done first */
   depends: string[];
+  /** git worktree the agent works in ("" = main checkout) */
+  worktree: string;
   extra: [string, string][];
   /** body before the agent sections */
   description: string;
@@ -44,6 +46,10 @@ export interface BoardSettings {
   batchSize: number;
   /** queue stopped: running agents finish, none start */
   paused: boolean;
+  /** each agent gets its own branch + git worktree */
+  isolation: "none" | "worktree";
+  worktreeSetup: string;
+  linkNodeModules: boolean;
   shared: boolean;
 }
 
@@ -55,6 +61,9 @@ export const DEFAULT_SETTINGS: BoardSettings = {
   runMode: "rolling",
   batchSize: 2,
   paused: false,
+  isolation: "none",
+  worktreeSetup: "",
+  linkNodeModules: true,
   shared: false,
 };
 
@@ -88,6 +97,7 @@ export interface TaskPatch {
   branch?: string;
   paneId?: string;
   depends?: string[];
+  worktree?: string;
   description?: string;
   /** line appended to "## Progress log" */
   log?: string;

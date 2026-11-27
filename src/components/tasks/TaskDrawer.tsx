@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTasks } from "../../tasks/store";
 import { livePane, openAgentTerminal, planTasks, projectForRoot, startAgent, stopAgent } from "../../tasks/agent";
+import { mergeTaskBranch, openTaskPr, removeTaskWorktree } from "../../tasks/worktree";
 import { PRIORITIES, type BoardState, type Task } from "../../tasks/types";
 import { useWorkspace } from "../../store/workspace";
 import { confirmDelete } from "./TasksView";
@@ -274,6 +275,7 @@ export function TaskDrawer({ root, task, state, onClose }: { root: string; task:
             <span className="sb-spacer" />
             <button className="btn small ghost danger" onClick={() => void confirmDelete(root, task)}>Delete</button>
           </div>
+          {task.worktree && task.branch.startsWith("tcon/") && <WorktreeActions root={root} task={task} busy={running} />}
 
           <div className="tkd-section">
             <div className="tkd-section-title">Description</div>
@@ -305,6 +307,27 @@ export function TaskDrawer({ root, task, state, onClose }: { root: string; task:
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Review actions for a task done in its own worktree: merge, open a PR, remove the worktree. */
+function WorktreeActions({ root, task, busy }: { root: string; task: Task; busy: boolean }) {
+  const [force, setForce] = useState(false);
+  return (
+    <div className="tkd-actions tkd-wt" title={task.worktree}>
+      <span className="tkd-wt-label"><Icon name="branch" size={12} />{task.branch}</span>
+      <button className="btn small" disabled={busy} title="Merge this branch into the main checkout's current branch" onClick={() => void mergeTaskBranch(root, task)}>Merge</button>
+      <button className="btn small" disabled={busy} title="Push the branch and open a pull request (GitHub CLI)" onClick={() => void openTaskPr(root, task)}>Open PR</button>
+      <span className="sb-spacer" />
+      {force ? (
+        <>
+          <button className="btn small danger" onClick={() => void removeTaskWorktree(root, task, true).then(() => setForce(false))}>Remove anyway</button>
+          <button className="btn small ghost" onClick={() => setForce(false)}>Cancel</button>
+        </>
+      ) : (
+        <button className="btn small ghost" disabled={busy} onClick={() => void removeTaskWorktree(root, task).then((ok) => !ok && setForce(true))}>Remove worktree</button>
+      )}
     </div>
   );
 }

@@ -316,3 +316,5 @@
 .tka-pill:hover { background: var(--bg-3); }
 .tka-pill.tka-blocked { border-color: var(--warn); color: var(--warn); }
 .tka-time { color: var(--fg-dim); }
+.tkd-wt { border-top: 1px dashed var(--border); padding-top: var(--sp-2); }
+.tkd-wt-label { display: inline-flex; align-items: center; gap: var(--sp-1); font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--fg-dim); }

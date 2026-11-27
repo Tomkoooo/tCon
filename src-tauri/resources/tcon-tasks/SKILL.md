@@ -60,6 +60,7 @@ Rules for editing:
 Do these stages in order. Update the task file at every stage so the board shows where you are.
 
 1. **Claim.** Set `status: in-progress`, `agent: running`, add a log line `Started`. Record the current git branch in `branch:`.
+   If tCon started you in a separate git worktree (the prompt says so), the task file isn't in that worktree: edit it at the absolute path you were given, commit in the worktree, and don't merge or push.
 2. **Understand.** Read the task and its description carefully, then inspect the relevant code. If the request is ambiguous or you need a decision, go to "Blocked" below instead of guessing.
 3. **Plan.** Write a short, concrete plan (numbered steps, files to touch, how you'll verify) under `## Plan`. Log `Plan written`. If `## Plan` already holds a triage plan (see below), follow it and only add to it; don't rewrite it.
 4. **Implement.** Make the changes. Log notable milestones (one line each, not a diary).

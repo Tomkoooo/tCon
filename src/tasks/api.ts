@@ -17,5 +17,9 @@ export const tasksApi = {
   saveSettings: (root: string, settings: BoardSettings) => invoke<Board>("tasks_save_settings", { root, settings }),
   setQueue: (root: string, queue: string[], batch?: string[]) => invoke<Board>("tasks_set_queue", { root, queue, batch: batch ?? null }),
   installSkill: (configDirs: string[]) => invoke<string[]>("tasks_install_skill", { configDirs }),
+  worktreeAdd: (root: string, taskId: string) => invoke<{ path: string; branch: string; base: string }>("task_worktree_add", { root, taskId }),
+  worktreeRemove: (root: string, path: string, branch: string, force: boolean) => invoke<string>("task_worktree_remove", { root, path, branch, force }),
+  worktreeMerge: (root: string, branch: string) => invoke<string>("task_worktree_merge", { root, branch }),
+  worktreePr: (root: string, branch: string, title: string) => invoke<string>("task_worktree_pr", { root, branch, title }),
   refreshSkill: (configDirs: string[]) => invoke<string[]>("tasks_refresh_skill", { configDirs }),
 };
