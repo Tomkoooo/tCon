@@ -5,6 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { api } from "../../api";
 import type { FsChangedEvent, GitBranch, GitCommit, GitFileStatus, GitOp, GitStatus, GitWorktree } from "../../types";
 import { refreshGitForRoot } from "../../store/gitRefresh";
+import { onRefresh } from "../../refresh";
 import { useContextMenu, type MenuItem } from "../ContextMenu";
 import { computeGraph, GRAPH_COLORS } from "./graphLayout";
 import type { GraphRow } from "./graphLayout";
@@ -235,6 +236,7 @@ export function GitPanel({ root: rawRoot, gitStatus, onOpenDiff, onOpenFile }: G
     setBranches([]);
     setWorktrees([]);
     void reload(isCancelled);
+    const offRefresh = onRefresh(root, () => void reload(isCancelled));
     listen<FsChangedEvent>("fs-changed", (ev) => {
       if (!ev.payload.git || trimSlash(ev.payload.root) !== root) return;
       if (timer) clearTimeout(timer);
@@ -247,6 +249,7 @@ export function GitPanel({ root: rawRoot, gitStatus, onOpenDiff, onOpenFile }: G
       cancelled = true;
       if (timer) clearTimeout(timer);
       unlisten?.();
+      offRefresh();
     };
   }, [root, reload]);
 
@@ -548,7 +551,7 @@ export function GitPanel({ root: rawRoot, gitStatus, onOpenDiff, onOpenFile }: G
                 <div
                   key={c.id}
                   className={`sb-graph-row${c.sync ? ` sb-sync-${c.sync}` : ""}`}
-                  title={`${c.shortId}  ${c.author}\n${new Date(c.time > 1e12 ? c.time : c.time * 1000).toLocaleString()}${c.sync ? `\n${SYNC_TITLE[c.sync]}` : ""}\n\n${c.summary}`}
+                  title={`${c.summary}\n\n${c.author} · ${relTime(c.time)} (${new Date(c.time > 1e12 ? c.time : c.time * 1000).toLocaleString()})\n${c.shortId}${c.sync ? `\n${SYNC_TITLE[c.sync]}` : ""}`}
                 >
                   <GraphCell row={row} lanes={graphLanes} sync={c.sync} />
                   <span className="sb-graph-text">
@@ -559,8 +562,6 @@ export function GitPanel({ root: rawRoot, gitStatus, onOpenDiff, onOpenFile }: G
                   </span>
                   {c.sync === "outgoing" && <span className="sb-sync-badge" title={SYNC_TITLE.outgoing}>↑</span>}
                   {c.sync === "incoming" && <span className="sb-sync-badge" title={SYNC_TITLE.incoming}>↓</span>}
-                  <span className="sb-graph-author">{c.author}</span>
-                  <span className="sb-graph-time">{relTime(c.time)}</span>
                 </div>
               );
             })}

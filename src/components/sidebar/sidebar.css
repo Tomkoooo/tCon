@@ -263,24 +263,6 @@
   padding-left: 2px;
 }
 .sb-graph-summary { vertical-align: middle; }
-.sb-graph-author {
-  flex: none;
-  max-width: 90px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-left: 8px;
-  color: var(--fg-dim);
-  font-size: 12px;
-}
-.sb-graph-time {
-  flex: none;
-  width: 30px;
-  text-align: right;
-  margin-left: 6px;
-  color: var(--fg-dim);
-  font-size: 12px;
-}
-
 .sb-title {
   flex: none; display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px;
   font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-dim);

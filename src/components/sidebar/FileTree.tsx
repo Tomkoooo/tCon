@@ -1,3 +1,4 @@
+import { onRefresh, refreshWorkspace } from "../../refresh";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { listen } from "@tauri-apps/api/event";
@@ -119,6 +120,12 @@ export function FileTree({ root: rawRoot, gitStatus, onOpenFile }: FileTreeProps
       dirs.forEach((d) => void loadDir(d));
     };
 
+    const offRefresh = onRefresh(root, () => {
+      refreshAll = true;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(flush, 0);
+    });
+
     listen<FsChangedEvent>("fs-changed", (ev) => {
       if (trimSlash(ev.payload.root) !== root) return;
       if (ev.payload.paths.length === 0) refreshAll = true;
@@ -134,6 +141,7 @@ export function FileTree({ root: rawRoot, gitStatus, onOpenFile }: FileTreeProps
       disposed = true;
       if (timer) clearTimeout(timer);
       unlisten?.();
+      offRefresh();
     };
   }, [root, loadDir]);
 
@@ -169,7 +177,7 @@ export function FileTree({ root: rawRoot, gitStatus, onOpenFile }: FileTreeProps
   }, [expanded, onOpenFile, setExpanded]);
 
   const collapseAll = () => setExpandedByRoot((prev) => ({ ...prev, [root]: [] }));
-  const refresh = resetCache;
+  const refresh = () => refreshWorkspace(root);
 
   // Keep the selected row visible.
   useEffect(() => {
@@ -232,7 +240,7 @@ export function FileTree({ root: rawRoot, gitStatus, onOpenFile }: FileTreeProps
             {!showHidden && <path d="M2 14L14 2" />}
           </svg>
         </button>
-        <button className="sb-icon-btn" title="Refresh" onClick={refresh}>
+        <button className="sb-icon-btn" title="Refresh explorer, git status and open files from disk" onClick={refresh}>
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
             <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2v3h-3" />
           </svg>

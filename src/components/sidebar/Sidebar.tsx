@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { GitStatus } from "../../types";
 import { FileTree } from "./FileTree";
 import { GitPanel } from "./GitPanel";
+import { refreshWorkspace } from "../../refresh";
 import "./sidebar.css";
 
 export type SidebarTab = "files" | "git";
@@ -29,6 +30,13 @@ export function Sidebar({ root, gitStatus, tab, onOpenFile, onOpenDiff }: Sideba
       <div className="sb-title">
         {tab === "files" ? "Explorer" : "Source Control"}
         {tab === "git" && changeCount > 0 && <span className="sb-count">{changeCount}</span>}
+        {tab === "git" && (
+          <button className="sb-icon-btn" style={{ marginLeft: "auto" }} title="Refresh git status, graph and open files from disk" onClick={() => refreshWorkspace(root)}>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+              <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2v3h-3" />
+            </svg>
+          </button>
+        )}
       </div>
       <div className="sb-content">
         {(mounted.files || tab === "files") && (

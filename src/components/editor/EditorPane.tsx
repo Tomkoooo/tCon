@@ -1,3 +1,4 @@
+import { useRefresh } from "../../refresh";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { listen } from "@tauri-apps/api/event";
@@ -265,8 +266,11 @@ function FileEditor({ tabId, path, root }: { tabId: string; path: string; root: 
   }, [path, isMd]);
 
   useFsChanged((ev) => {
-    if (ev.paths.some((p) => trimSlash(p) === path)) void reloadFromDisk(false);
+    // Empty `paths` = the watcher lost events and asks for a full rescan.
+    if (ev.paths.length === 0 || ev.paths.some((p) => trimSlash(p) === path)) void reloadFromDisk(false);
   });
+  // Manual refresh / window focus: re-read from disk (no-op when unchanged; prompts if dirty).
+  useRefresh(root, () => void reloadFromDisk(false));
 
   const html = useMemo(() => (isMd && mdMode !== "edit" ? md.render(previewSrc) : ""), [isMd, mdMode, previewSrc]);
 

@@ -178,8 +178,12 @@ fn debounce_loop(
         let mut paths: Vec<String> = Vec::new();
         let mut seen = std::collections::HashSet::new();
         let mut git = false;
+        // Set when the OS dropped events (FSEvents/inotify overflow) or the batch is too large:
+        // listeners then get an empty `paths` list, which means "rescan everything".
+        let mut rescan = false;
         let mut handle = |ev: notify::Result<notify::Event>| {
-            let Ok(ev) = ev else { return };
+            let Ok(ev) = ev else { rescan = true; return };
+            if ev.need_rescan() { rescan = true; }
             for p in ev.paths {
                 // Map canonical prefix (e.g. /private/var) back to the root the caller used.
                 let p = match p.strip_prefix(&canon_root) {
@@ -188,7 +192,8 @@ fn debounce_loop(
                 };
                 let (include, g) = classify(&orig_root, &p);
                 git |= g;
-                if include && paths.len() < MAX_EVENT_PATHS {
+                if include {
+                    if paths.len() >= MAX_EVENT_PATHS { rescan = true; continue; }
                     let s = p.to_string_lossy().into_owned();
                     if seen.insert(s.clone()) { paths.push(s); }
                 }
@@ -206,7 +211,9 @@ fn debounce_loop(
                 Err(mpsc::RecvTimeoutError::Disconnected) => { closed = true; break; }
             }
         }
-        if !paths.is_empty() || git {
+        if rescan {
+            emit(FsChanged { root: root_key.clone(), paths: Vec::new(), git: true });
+        } else if !paths.is_empty() || git {
             emit(FsChanged { root: root_key.clone(), paths, git });
         }
         if closed { return; }

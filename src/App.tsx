@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import { findPane, isPaneVisible, useWorkspace } from "./store/workspace";
 import { scheduleGitRefresh } from "./store/gitRefresh";
+import { installFocusRefresh, onRefresh } from "./refresh";
 import type { FsChangedEvent, ProgramStatus } from "./types";
 import { TabBar } from "./components/TabBar";
 import { ProjectView } from "./components/ProjectView";
@@ -35,7 +36,15 @@ function useBackendEvents() {
         for (const p of Object.values(useWorkspace.getState().projects)) if (p.rootPath === payload.root) scheduleGitRefresh(p.id);
       }),
     );
-    return () => unsubs.forEach((u) => u.then((f) => f()));
+    const offRefresh = onRefresh(null, () => {
+      for (const p of Object.values(useWorkspace.getState().projects)) scheduleGitRefresh(p.id, 0);
+    });
+    const offFocus = installFocusRefresh();
+    return () => {
+      unsubs.forEach((u) => u.then((f) => f()));
+      offRefresh();
+      offFocus();
+    };
   }, []);
 }
 

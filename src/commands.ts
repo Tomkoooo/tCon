@@ -4,6 +4,7 @@ import { hasEditors, useWorkspace } from "./store/workspace";
 import { terminals } from "./terminal/registry";
 import { closeEditors } from "./components/editor/editorActions";
 import { useTheming } from "./theming/store";
+import { refreshWorkspace } from "./refresh";
 
 export interface Keybinding { key: string; command: string; when?: string; args?: unknown }
 
@@ -56,6 +57,7 @@ const toggleView = (tab: "files" | "git") =>
 
 export const COMMANDS: Command[] = [
   { id: "tcon.newProject", title: "Open Project…", run: () => ws().setModal({ kind: "newProject" }) },
+  { id: "tcon.refresh", title: "Refresh Files and Git Status", run: () => refreshWorkspace(proj()?.rootPath) },
   { id: "tcon.openSettings", title: "Settings", run: () => ws().setModal({ kind: "profiles" }) },
   { id: "tcon.openSettingsJson", title: "Open Settings (JSON)", run: () => void openConfigFile("settings.json") },
   { id: "tcon.openKeybindingsJson", title: "Open Keyboard Shortcuts (JSON)", run: () => void openConfigFile("keybindings.json") },
@@ -112,6 +114,7 @@ export const COMMAND_MAP = new Map(COMMANDS.map((c) => [c.id, c]));
 export const DEFAULT_KEYBINDINGS: Keybinding[] = [
   { key: "cmd+t", command: "tcon.newProject" },
   { key: "cmd+,", command: "tcon.openSettings" },
+  { key: "cmd+shift+r", command: "tcon.refresh" },
   { key: "cmd+j", command: "tcon.jumpToAttention" },
   ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({ key: `cmd+${n}`, command: "tcon.selectProject", args: n })),
   { key: "cmd+9", command: "tcon.selectProject", args: -1 },
