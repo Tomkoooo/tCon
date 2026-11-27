@@ -10,6 +10,7 @@ mod git;
 pub mod osc;
 mod pty;
 mod security;
+mod sessions;
 mod tasks;
 mod themes;
 
@@ -189,6 +190,9 @@ pub fn run() {
             appicon::app_set_icon,
             appicon::app_icon_preview,
             clipboard::clipboard_file_paths,
+            sessions::claude_pane_sessions,
+            sessions::claude_forget_panes,
+            sessions::claude_copy_session,
             agent_worktree::task_worktree_add,
             agent_worktree::task_worktree_remove,
             agent_worktree::task_worktree_merge,

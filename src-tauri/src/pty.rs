@@ -87,6 +87,8 @@ impl PtyManager {
         cmd.env("TERM_PROGRAM_VERSION", env!("CARGO_PKG_VERSION"));
         cmd.env("LANG", std::env::var("LANG").unwrap_or_else(|_| "en_US.UTF-8".into()));
         cmd.env_remove("CLAUDECODE"); // don't let nested sessions think they're inside Claude
+        // Lets the SessionStart hook tCon passes to Claude record which pane a session runs in.
+        cmd.env("TCON_PANE_ID", &opts.pane_id);
         // tCon's own launch/build variables (TAURI_*, npm_*, signing secrets) stay out of shells.
         for k in crate::security::inherited_vars_to_strip() {
             cmd.env_remove(k);

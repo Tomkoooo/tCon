@@ -24,6 +24,7 @@ Each release's section becomes its GitHub release notes.
 - Git graph: rows with branch or tag badges show a 20-character subject, and long badge names are shortened in the middle (`origin/fe…rect-loop`), so every badge fits. Hover for the full names.
 
 ### Fixed
+- Claude sessions: every Claude terminal now resumes its own conversation after a restart (`claude --resume <its session>`), not just one per project. When you switch accounts, each session's conversation is copied to the new account and continues there; busy sessions move as soon as they finish their turn. Before, `--continue` on the new account found no conversation.
 - Terminals: dropping files from Finder onto a terminal now inserts their paths (Claude Code attaches dropped images), and pasting files copied in Finder (⌘C, ⌘V) inserts their full paths instead of just the file names.
 - Tasks: `#label` and `!priority` in a task title now work in the Tasks sidebar box and the board's inline add too, not only in the quick panel.
 - Board: adding several cards in a row (⇧↵) no longer scrolls the column to the new card, so the input stays in view.

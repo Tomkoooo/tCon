@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useWorkspace } from "./store/workspace";
 import { notifyPaneStatus } from "./notify";
 import { installFileDrop } from "./terminal/fileDrop";
+import { installSessionTracker } from "./claudeSessionTracker";
 import { scheduleGitRefresh } from "./store/gitRefresh";
 import { installFocusRefresh, onRefresh } from "./refresh";
 import type { FsChangedEvent, ProgramStatus } from "./types";
@@ -46,11 +47,13 @@ function useBackendEvents() {
     });
     const offFocus = installFocusRefresh();
     const offDrop = installFileDrop();
+    const offSessions = installSessionTracker();
     return () => {
       unsubs.forEach((u) => u.then((f) => f()));
       offRefresh();
       offFocus();
       offDrop();
+      offSessions();
     };
   }, []);
 }

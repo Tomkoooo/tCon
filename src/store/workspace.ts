@@ -7,6 +7,7 @@ import { equal, insertPane, paneIds, removePane, sanitize, setSizes, uid } from 
 import { terminals } from "../terminal/registry";
 import { accountEnv, useAccounts } from "./accounts";
 import { withClaudeModel } from "../claudeModel";
+import { isSessionId, resumeCommand, withSessionTracking } from "../claudeSessions";
 
 export const PALETTE = ["#6aa7ff", "#5fc48a", "#e5b450", "#ef5f5f", "#b884f0", "#4fc6c6", "#f08a4b", "#e57ab8", "#9aa3ad"];
 export const INACTIVE_AFTER_MS = 30 * 60 * 1000;
@@ -105,6 +106,8 @@ interface WorkspaceState {
   // runtime events
   markActivity(paneId: string): void;
   setPaneTitle(paneId: string, title: string): void;
+  /** Record the Claude session a pane runs (for resume). */
+  setPaneSession(paneId: string, sessionId: string): void;
   setProgramStatus(paneId: string, st: ProgramStatus): void;
   markSeen(paneId: string): void;
   setExited(paneId: string, code: number | null): void;
@@ -228,7 +231,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     set((s) => (s.projects[id] ? { projects: { ...s.projects, [id]: fn(s.projects[id]) } } : s));
 
   const spawn = (project: Project, pane: Pane) => {
-    terminals.ensure(withClaudeModel(project, pane), paneEnv(get().profiles, project, pane));
+    terminals.ensure(withSessionTracking(withClaudeModel(project, pane)), paneEnv(get().profiles, project, pane));
   };
 
   const dropStatuses = (ids: string[]) =>
@@ -519,7 +522,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       patchProject(project.id, (p) => ({ ...p, panes: { ...p.panes, [paneId]: { ...pane, exited: false, exitCode: null } } }));
       dropStatuses([paneId]);
       const run = command !== undefined ? { ...pane, startupCommand: command } : pane;
-      terminals.respawn(withClaudeModel(project, run), paneEnv(get().profiles, project, run));
+      terminals.respawn(withSessionTracking(withClaudeModel(project, run)), paneEnv(get().profiles, project, run));
     },
 
     resizeSplit(projectId, splitId, sizes) {
@@ -737,6 +740,13 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       }));
     },
 
+    setPaneSession(paneId, sessionId) {
+      const found = findPane(get(), paneId);
+      if (!found || found[1].sessionId === sessionId) return;
+      const [project, pane] = found;
+      patchProject(project.id, (p) => ({ ...p, panes: { ...p.panes, [paneId]: { ...pane, sessionId } } }));
+    },
+
     setPaneTitle(paneId, title) {
       const found = findPane(get(), paneId);
       if (!found || found[1].title === title) return;
@@ -823,10 +833,14 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
             api.fsWatch(p.rootPath).catch(() => {});
             let continued = false;
             for (const pane of Object.values(p.panes)) {
-              // Resume the most recent Claude conversation in this directory (once per project —
-              // two panes continuing the same conversation would conflict).
+              // Each Claude pane resumes its own recorded conversation. Panes without one
+              // resume the directory's latest conversation, once per project (two panes
+              // continuing the same conversation would conflict).
               let restored = pane;
-              if (pane.isClaude && pane.startupCommand === CLAUDE_CMD && !continued) {
+              const claudeCmd = pane.isClaude && (pane.startupCommand === CLAUDE_CMD || /^claude --(resume|continue)\b/.test(pane.startupCommand ?? ""));
+              if (claudeCmd && isSessionId(pane.sessionId)) {
+                restored = { ...pane, startupCommand: resumeCommand(pane.sessionId) };
+              } else if (pane.isClaude && pane.startupCommand === CLAUDE_CMD && !continued) {
                 restored = { ...pane, startupCommand: `${CLAUDE_CMD} --continue` };
                 continued = true;
               }
