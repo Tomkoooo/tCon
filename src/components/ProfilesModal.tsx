@@ -3,7 +3,7 @@
 // and are listed under Advanced so they can be cleaned up.
 import { useEffect, useRef, useState } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { openPath } from "@tauri-apps/plugin-opener";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { api } from "../api";
 import { accountLabel, planLabel, useAccounts } from "../store/accounts";
 import { useWorkspace } from "../store/workspace";
@@ -13,6 +13,7 @@ import type { Account } from "../types";
 import { Modal } from "./Modal";
 import { AccountAvatar, accountOrg } from "./AccountChip";
 import { AppearanceSection, KeybindingsSection, TerminalSection, openConfigInEditor } from "./AppearanceSettings";
+import { SecuritySection } from "./SecuritySettings";
 import { SettingRow, SettingsGroup, SettingsSearch, SettingsSection } from "./settingsKit";
 import { Badge, CommitInput, Segmented } from "./ui";
 import { Icon } from "./icons";
@@ -23,6 +24,7 @@ const SECTIONS = [
   { id: "appearance", label: "Appearance", icon: "M8 1.5a6.5 6.5 0 1 0 0 13c.8 0 1.2-.5 1.2-1.1 0-.8-.6-1-.6-1.7 0-.6.5-1 1.1-1H11a3.5 3.5 0 0 0 3.5-3.5C14.5 4 11.6 1.5 8 1.5z" },
   { id: "terminal", label: "Terminal", icon: "M2 3h12v10H2zM4.5 6l2 2-2 2M8 10.5h3.5" },
   { id: "keyboard", label: "Keyboard Shortcuts", icon: "M1.5 4h13v8h-13zM4 6.5h1m2 0h1m2 0h1M4 9.5h8" },
+  { id: "security", label: "Security", icon: "M8 1.5l5 2v4c0 3.2-2.2 5.6-5 7-2.8-1.4-5-3.8-5-7v-4zM5.8 8l1.6 1.6 2.9-3" },
   { id: "advanced", label: "Advanced", icon: "M3 4h10M3 8h10M3 12h10M6 2.5v3M10 6.5v3M5 10.5v3" },
 ] as const;
 type SectionId = (typeof SECTIONS)[number]["id"];
@@ -87,6 +89,7 @@ export function ProfilesModal() {
             {show("appearance") && <AppearanceSection />}
             {show("terminal") && <TerminalSection />}
             {show("keyboard") && <KeybindingsSection />}
+            {show("security") && <SecuritySection />}
             {show("advanced") && <AdvancedSection />}
           </SettingsSearch.Provider>
           {q && <div className="settings-empty">No settings match “{q}”</div>}
@@ -292,7 +295,7 @@ function AdvancedSection() {
           <button className="btn" onClick={() => openConfigInEditor("settings.json")}>settings.json</button>
           <button className="btn" onClick={() => openConfigInEditor("keybindings.json")}>keybindings.json</button>
           <button className="btn" onClick={() => openConfigInEditor("custom.css")}>custom.css</button>
-          <button className="btn ghost" onClick={() => dir && void openPath(dir).catch(() => {})}>Reveal folder</button>
+          <button className="btn ghost" onClick={() => dir && void revealItemInDir(dir).catch(() => {})}>Reveal folder</button>
         </div>
       </SettingRow>
       <SettingRow label="Rescan themes" description="Look for newly installed color and icon themes." keywords="themes extensions reload" modified={false}>

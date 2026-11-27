@@ -265,22 +265,27 @@ impl Watchers {
 
 #[tauri::command]
 pub async fn fs_list_dir(path: String, show_hidden: bool) -> Result<Vec<FsEntry>, String> {
+    crate::security::check_fs_access(&path)?;
     blocking(move || list_dir_sync(&path, show_hidden)).await
 }
 #[tauri::command]
 pub async fn fs_read_text(path: String) -> Result<FileContent, String> {
+    crate::security::check_fs_access(&path)?;
     blocking(move || read_text_sync(&path)).await
 }
 #[tauri::command]
 pub async fn fs_write_text(path: String, content: String) -> Result<(), String> {
+    crate::security::check_fs_access(&path)?;
     blocking(move || write_text_sync(&path, &content)).await
 }
 #[tauri::command]
 pub async fn fs_create_project_dir(path: String, git_init: bool) -> Result<(), String> {
+    crate::security::check_fs_access(&path)?;
     blocking(move || create_project_dir_sync(&path, git_init)).await
 }
 #[tauri::command]
 pub fn fs_watch(app: tauri::AppHandle, state: tauri::State<'_, Watchers>, root: String) -> Result<(), String> {
+    crate::security::check_fs_access(&root)?;
     state.watch_with(&root, move |payload| {
         let _ = app.emit("fs-changed", payload);
     })

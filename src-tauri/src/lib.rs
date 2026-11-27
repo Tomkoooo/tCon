@@ -5,6 +5,7 @@ mod fs;
 mod git;
 pub mod osc;
 mod pty;
+mod security;
 mod tasks;
 mod themes;
 
@@ -125,6 +126,14 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let mut context = tauri::generate_context!();
+    // The `devtools` feature (for the browser's Web Inspector) would also enable it in the
+    // main UI webview: keep it off there in release builds.
+    if !cfg!(debug_assertions) {
+        for w in &mut context.config_mut().app.windows {
+            w.devtools = Some(false);
+        }
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -164,6 +173,9 @@ pub fn run() {
             cli::claude_auth_status,
             cli::claude_auth_logout,
             cli::account_prepare_dir,
+            security::security_audit,
+            security::security_fix_permissions,
+            security::security_keychain_acl,
             themes::themes_scan,
             themes::theme_load,
             themes::icon_theme_load,
@@ -186,7 +198,7 @@ pub fn run() {
             tasks::tasks_save_settings,
             tasks::tasks_install_skill,
         ])
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building tauri application")
         .run(|app, event| {
             if let tauri::RunEvent::Exit = event {

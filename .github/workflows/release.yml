@@ -16,18 +16,22 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
-permissions:
-  contents: write
+# No token permissions by default; each job asks for what it needs.
+permissions: {}
 
 jobs:
   check:
     name: Check whether this version is already released
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       version: ${{ steps.v.outputs.version }}
       exists: ${{ steps.v.outputs.exists }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - id: v
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -45,6 +49,8 @@ jobs:
     name: Build (${{ matrix.name }})
     needs: check
     if: needs.check.outputs.exists == 'false'
+    permissions:
+      contents: write # create the GitHub release and upload the installers
     strategy:
       fail-fast: false
       matrix:
@@ -67,7 +73,9 @@ jobs:
           #   args: --bundles nsis,msi
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - name: Install Tauri Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
@@ -75,21 +83,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev libssl-dev
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch
         with:
+          toolchain: stable
           targets: ${{ startsWith(matrix.platform, 'macos') && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: src-tauri
           key: ${{ matrix.args }}
 
-      - run: npm ci
+      - run: npm ci --ignore-scripts
 
       # Optional macOS code signing + notarization. Each variable is only exported when
       # the matching repository secret is set; without them the app is built unsigned.
@@ -116,7 +125,7 @@ jobs:
             fi
           done
 
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:

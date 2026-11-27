@@ -62,6 +62,9 @@ fn run(bin: &str, args: &[String], cwd: Option<&str>, env: &HashMap<String, Stri
         .env("GIT_TERMINAL_PROMPT", "0")
         .env_remove("CLAUDECODE")
         .stdin(Stdio::null());
+    for k in crate::security::inherited_vars_to_strip() {
+        cmd.env_remove(k);
+    }
     if let Some(d) = cwd {
         cmd.current_dir(d);
     }
@@ -234,17 +237,45 @@ pub async fn claude_auth_logout(config_dir: Option<String>) -> Result<(), String
 
 /// Items of ~/.claude that every account shares (history, settings, memory, commands…),
 /// so switching accounts keeps `--continue`, CLAUDE.md, plugins etc.
+/// Never add a credential file or `.claude.json` here: each account keeps its own login.
 const SHARED: &[&str] = &["projects", "settings.json", "CLAUDE.md", "commands", "agents", "skills", "plugins", "todos"];
+
+/// Create a private directory (0700 on Unix) and any missing parents with the same mode.
+fn create_private_dir(dir: &Path) -> Result<(), String> {
+    let mut b = std::fs::DirBuilder::new();
+    b.recursive(true);
+    #[cfg(unix)]
+    std::os::unix::fs::DirBuilderExt::mode(&mut b, 0o700);
+    b.create(dir).map_err(e2s)
+}
 
 /// Create an extra account's config dir, symlinking the shared items from ~/.claude.
 #[tauri::command]
 pub fn account_prepare_dir(dir: String) -> Result<(), String> {
     let home = dirs::home_dir().ok_or("no home dir")?;
+    prepare_account_dir_in(&home, Path::new(&dir))
+}
+
+fn prepare_account_dir_in(home: &Path, dir: &Path) -> Result<(), String> {
     let base = home.join(".claude");
-    let dir = PathBuf::from(dir);
-    std::fs::create_dir_all(&dir).map_err(e2s)?;
-    std::fs::create_dir_all(base.join("projects")).map_err(e2s)?;
+    let accounts = home.join(".claude-accounts");
+    // Only ~/.claude-accounts/<name>: the renderer can't make tCon create or link elsewhere.
+    let name = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    if dir.parent() != Some(accounts.as_path()) || name.is_empty() || name.starts_with('.') {
+        return Err(format!("account dirs must live in {}", accounts.display()));
+    }
+    create_private_dir(&accounts)?;
+    create_private_dir(dir)?;
+    #[cfg(unix)]
+    for d in [&accounts, &dir.to_path_buf()] {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(d, std::fs::Permissions::from_mode(0o700)).map_err(e2s)?;
+    }
+    create_private_dir(&base.join("projects"))?;
     for item in SHARED {
+        if crate::security::is_credential_file(item) || *item == ".claude.json" {
+            continue; // defensive: a login must never be shared between accounts
+        }
         let src = base.join(item);
         let dst = dir.join(item);
         if src.exists() && std::fs::symlink_metadata(&dst).is_err() {
@@ -266,6 +297,39 @@ mod tests {
 
     fn op(dir: &str, o: GitOp) -> Result<String, String> {
         git_op_sync(dir, o)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn account_dir_is_private_and_never_shares_credentials() {
+        use std::os::unix::fs::PermissionsExt;
+        let home = std::env::temp_dir().join(format!("tcon-acct-{}", uuid::Uuid::new_v4()));
+        let base = home.join(".claude");
+        std::fs::create_dir_all(&base).unwrap();
+        for f in ["settings.json", "CLAUDE.md", ".credentials.json", ".claude.json"] {
+            std::fs::write(base.join(f), "{}").unwrap();
+        }
+        std::fs::create_dir_all(base.join("skills")).unwrap();
+        assert!(SHARED.iter().all(|s| !crate::security::is_credential_file(s) && *s != ".claude.json"));
+
+        let dir = home.join(".claude-accounts/a1");
+        prepare_account_dir_in(&home, &dir).unwrap();
+        let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&dir), 0o700);
+        assert_eq!(mode(&home.join(".claude-accounts")), 0o700);
+        assert!(std::fs::symlink_metadata(dir.join("settings.json")).unwrap().file_type().is_symlink());
+        assert!(std::fs::symlink_metadata(dir.join("skills")).unwrap().file_type().is_symlink());
+        assert!(std::fs::symlink_metadata(dir.join(".credentials.json")).is_err());
+        assert!(std::fs::symlink_metadata(dir.join(".claude.json")).is_err());
+        // idempotent
+        prepare_account_dir_in(&home, &dir).unwrap();
+
+        // Anything outside ~/.claude-accounts/<name> is refused.
+        for bad in [home.join("elsewhere"), home.join(".claude-accounts"), home.join(".claude-accounts/a1/nested"), home.join(".claude-accounts/.hidden"), home.join(".claude")] {
+            assert!(prepare_account_dir_in(&home, &bad).is_err(), "{}", bad.display());
+        }
+        assert!(!home.join("elsewhere").exists());
+        std::fs::remove_dir_all(&home).ok();
     }
 
     #[test]

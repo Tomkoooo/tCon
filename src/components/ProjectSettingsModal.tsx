@@ -20,7 +20,8 @@ export function textToEnv(text: string) {
   }
   return env;
 }
-const SECRET_RE = /(KEY|TOKEN|SECRET|PASSWORD)/i;
+// Mirrors security::is_secret_env_name in the backend, which drops these names too.
+const SECRET_RE = /(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL)/i;
 
 export function ProjectSettingsModal({ projectId }: { projectId: string }) {
   const project = useWorkspace((s) => s.projects[projectId]);

@@ -1,7 +1,7 @@
 // Settings sections backed by ~/.tcon/settings.json / keybindings.json (VS Code formats):
 // Appearance, Terminal and Keyboard Shortcuts.
 import { useContext, useMemo } from "react";
-import { openPath } from "@tauri-apps/plugin-opener";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useWorkspace } from "../store/workspace";
 import { BUILTIN_ENTRIES, useTheming } from "../theming/store";
 import { BUILTIN_ICON_THEME_ID, BUILTIN_ICON_THEME_LABEL } from "../theming/iconTheme";
@@ -19,7 +19,8 @@ export function openConfigInEditor(name: string) {
   const st = useWorkspace.getState();
   const id = st.activeProjectId;
   if (!dir) return;
-  if (!id) return void openPath(`${dir}/${name}`).catch(() => {});
+  // No project to open it in: show it in Finder (tCon never hands files to the OS to "open").
+  if (!id) return void revealItemInDir(`${dir}/${name}`).catch(() => {});
   st.setModal(null);
   st.openEditor(id, `${dir}/${name}`);
 }

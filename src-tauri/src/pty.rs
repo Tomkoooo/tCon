@@ -79,7 +79,12 @@ impl PtyManager {
         cmd.env("TERM_PROGRAM_VERSION", env!("CARGO_PKG_VERSION"));
         cmd.env("LANG", std::env::var("LANG").unwrap_or_else(|_| "en_US.UTF-8".into()));
         cmd.env_remove("CLAUDECODE"); // don't let nested sessions think they're inside Claude
-        for (k, v) in &opts.env {
+        // tCon's own launch/build variables (TAURI_*, npm_*, signing secrets) stay out of shells.
+        for k in crate::security::inherited_vars_to_strip() {
+            cmd.env_remove(k);
+        }
+        // tCon never injects secrets: the project env editor rejects them, and so does this.
+        for (k, v) in opts.env.iter().filter(|(k, _)| !crate::security::is_secret_env_name(k)) {
             cmd.env(k, v);
         }
 

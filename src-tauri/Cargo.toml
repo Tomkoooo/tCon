@@ -36,6 +36,7 @@ base64 = "0.23.1"
 tauri-plugin-dialog = "2.8.4"
 tauri-plugin-notification = "2.8.1"
 rusqlite = { version = "0.43.0", features = ["bundled"] }
+sha2 = "0.10"
 
 # Runtime app icon (src/appicon.rs): window icons from PNG off macOS, the Dock icon via AppKit on macOS.
 [target.'cfg(not(target_os = "macos"))'.dependencies]
