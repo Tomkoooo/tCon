@@ -3,22 +3,25 @@ import { terminals } from "../terminal/registry";
 import { useWorkspace } from "../store/workspace";
 import type { Pane, PaneStatus } from "../types";
 import { StatusDot } from "./StatusDot";
+import { ClaudeMark, Icon } from "./icons";
 
 interface Props {
   projectId: string;
   pane: Pane;
   status?: PaneStatus;
   focused: boolean;
+  /** show the per-pane header (only useful when a tab holds split terminals) */
+  showHeader: boolean;
   accent: string;
   onContextMenu(e: React.MouseEvent): void;
 }
 
-export function TerminalPane({ projectId, pane, status, focused, accent, onContextMenu }: Props) {
+export function TerminalPane({ projectId, pane, status, focused, showHeader, accent, onContextMenu }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const focusPane = useWorkspace((s) => s.focusPane);
   const closePane = useWorkspace((s) => s.closePane);
   const restartPane = useWorkspace((s) => s.restartPane);
-  const addPane = useWorkspace((s) => s.addPane);
+  const addTerminal = useWorkspace((s) => s.addTerminal);
 
   useEffect(() => {
     const el = ref.current;
@@ -41,24 +44,30 @@ export function TerminalPane({ projectId, pane, status, focused, accent, onConte
       onMouseDown={() => focusPane(projectId, pane.id)}
       onContextMenu={onContextMenu}
     >
+      {showHeader && (
       <div className="pane-header">
         <StatusDot status={status} />
-        {pane.isClaude && <span className="pane-claude-tag">claude</span>}
+        {pane.isClaude && <ClaudeMark size={11} />}
         <span className="pane-title" title={`${pane.title}\n${pane.cwd}`}>
           {status?.title || pane.title}
         </span>
         {msg && <span className="pane-msg" title={msg}>{msg}</span>}
         {showProgress && <span className="pane-progress">{status!.progress}%</span>}
-        <button className="icon-btn" title="Split right (⌘D)" onClick={() => addPane(projectId, { claude: false, direction: "row" })}>⫿</button>
-        <button className="icon-btn" title="Split down (⇧⌘D)" onClick={() => addPane(projectId, { claude: false, direction: "column" })}>⊟</button>
-        <button className="icon-btn" title="Close (⌘W)" onClick={() => closePane(projectId, pane.id)}>×</button>
+        <button className="icon-btn" title="Split right (⌘D)" onClick={() => { focusPane(projectId, pane.id); addTerminal(projectId, { claude: false, split: "row" }); }}>
+          <Icon name="splitRight" size={14} />
+        </button>
+        <button className="icon-btn" title="Split down (⇧⌘D)" onClick={() => { focusPane(projectId, pane.id); addTerminal(projectId, { claude: false, split: "column" }); }}>
+          <Icon name="splitDown" size={14} />
+        </button>
+        <button className="icon-btn" title="Kill terminal (⌘W)" aria-label="Kill terminal" onClick={() => closePane(projectId, pane.id)}><Icon name="close" size={14} /></button>
       </div>
+      )}
       <div className="term-container" ref={ref} />
       {pane.exited && (
         <div className="pane-exited">
           <span>Process exited{pane.exitCode != null ? ` (${pane.exitCode})` : ""}</span>
-          <button className="btn primary" onClick={() => restartPane(pane.id)}>Restart</button>
-          <button className="btn" onClick={() => closePane(projectId, pane.id)}>Close</button>
+          <button className="btn small primary" onClick={() => restartPane(pane.id)}>Restart</button>
+          <button className="btn small" onClick={() => closePane(projectId, pane.id)}>Close</button>
         </div>
       )}
     </div>

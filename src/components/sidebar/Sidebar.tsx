@@ -2,23 +2,26 @@ import { useEffect, useState } from "react";
 import type { GitStatus } from "../../types";
 import { FileTree } from "./FileTree";
 import { GitPanel } from "./GitPanel";
+import { refreshWorkspace } from "../../refresh";
+import { TasksSection, TasksTitleActions, TasksView } from "../tasks/TasksView";
+import { BrowserTitleActions, BrowserView } from "../browser/BrowserView";
+import { Icon } from "../icons";
 import "./sidebar.css";
 
-export type SidebarTab = "files" | "git";
+export type SidebarTab = "files" | "git" | "tasks" | "browser";
 
 export interface SidebarProps {
   root: string;
   gitStatus?: GitStatus | null;
   tab: SidebarTab;
-  onTabChange(tab: SidebarTab): void;
-  onOpenFile(path: string): void;
+  onOpenFile(path: string, preview: boolean): void;
   onOpenDiff?(file: string | null, staged: boolean): void;
 }
 
-export function Sidebar({ root, gitStatus, tab, onTabChange, onOpenFile, onOpenDiff }: SidebarProps) {
+export function Sidebar({ root, gitStatus, tab, onOpenFile, onOpenDiff }: SidebarProps) {
   // Keep a tab mounted once it has been shown so its state (expanded folders,
   // loaded log) survives tab switches.
-  const [mounted, setMounted] = useState<Record<SidebarTab, boolean>>({ files: tab === "files", git: tab === "git" });
+  const [mounted, setMounted] = useState<Record<SidebarTab, boolean>>({ files: tab === "files", git: tab === "git", tasks: tab === "tasks", browser: tab === "browser" });
   useEffect(() => {
     setMounted((m) => (m[tab] ? m : { ...m, [tab]: true }));
   }, [tab]);
@@ -27,24 +30,16 @@ export function Sidebar({ root, gitStatus, tab, onTabChange, onOpenFile, onOpenD
 
   return (
     <div className="sb-root">
-      <div className="sb-tabs" role="tablist">
-        <button
-          role="tab"
-          aria-selected={tab === "files"}
-          className={`sb-tab${tab === "files" ? " sb-tab-active" : ""}`}
-          onClick={() => onTabChange("files")}
-        >
-          Files
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab === "git"}
-          className={`sb-tab${tab === "git" ? " sb-tab-active" : ""}`}
-          onClick={() => onTabChange("git")}
-        >
-          Git
-          {changeCount > 0 && <span className="sb-count">{changeCount}</span>}
-        </button>
+      <div className="sb-title">
+        {tab === "files" ? "Explorer" : tab === "tasks" ? "Tasks" : tab === "browser" ? "Browser" : "Source Control"}
+        {tab === "git" && changeCount > 0 && <span className="sb-count">{changeCount}</span>}
+        {tab === "git" && (
+          <button className="sb-icon-btn" style={{ marginLeft: "auto" }} title="Refresh" aria-label="Refresh" onClick={() => refreshWorkspace(root)}>
+            <Icon name="refresh" />
+          </button>
+        )}
+        {tab === "tasks" && <TasksTitleActions root={root} />}
+        {tab === "browser" && <BrowserTitleActions />}
       </div>
       <div className="sb-content">
         {(mounted.files || tab === "files") && (
@@ -54,7 +49,18 @@ export function Sidebar({ root, gitStatus, tab, onTabChange, onOpenFile, onOpenD
         )}
         {(mounted.git || tab === "git") && (
           <div className="sb-pane" hidden={tab !== "git"}>
-            <GitPanel root={root} gitStatus={gitStatus} onOpenDiff={onOpenDiff} />
+            <GitPanel root={root} gitStatus={gitStatus} onOpenDiff={onOpenDiff} onOpenFile={(p) => onOpenFile(p, false)} />
+            <TasksSection root={root} />
+          </div>
+        )}
+        {(mounted.tasks || tab === "tasks") && (
+          <div className="sb-pane" hidden={tab !== "tasks"}>
+            <TasksView root={root} />
+          </div>
+        )}
+        {(mounted.browser || tab === "browser") && (
+          <div className="sb-pane" hidden={tab !== "browser"}>
+            <BrowserView />
           </div>
         )}
       </div>

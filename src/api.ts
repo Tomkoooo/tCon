@@ -1,7 +1,7 @@
 // Typed wrappers around Tauri commands. All backend access goes through here.
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
-  FileContent, FsEntry, GitBranch, GitCommit, GitStatus, GitWorktree, Profile, RecentPath,
+  AuthStatus, FileContent, FsEntry, GitBranch, GitCommit, GitCommitDetails, GitOp, GitStatus, GitWorktree, Profile, RecentPath,
 } from "./types";
 
 export interface SpawnOptions {
@@ -39,10 +39,27 @@ export const api = {
 
   // Git
   gitStatus: (path: string) => invoke<GitStatus>("git_status", { path }),
-  gitLog: (path: string, limit = 200) => invoke<GitCommit[]>("git_log", { path, limit }),
+  gitLog: (path: string, limit = 200, currentOnly = false) => invoke<GitCommit[]>("git_log", { path, limit, currentOnly }),
+  gitCommitDetails: (root: string, id: string) => invoke<GitCommitDetails>("git_commit_details", { root, id }),
+  gitCommitDiff: (root: string, id: string) => invoke<string>("git_commit_diff", { root, id }),
   gitBranches: (path: string) => invoke<GitBranch[]>("git_branches", { path }),
   gitWorktrees: (path: string) => invoke<GitWorktree[]>("git_worktrees", { path }),
   gitDiff: (path: string, file: string | null, staged: boolean) => invoke<string>("git_diff", { path, file, staged }),
+  gitOp: (path: string, op: GitOp) => invoke<string>("git_op", { path, op }),
+
+  // Claude accounts
+  claudeAuthStatus: (configDir: string | null) => invoke<AuthStatus>("claude_auth_status", { configDir }),
+  claudeAuthLogout: (configDir: string | null) => invoke<void>("claude_auth_logout", { configDir }),
+  accountPrepareDir: (dir: string) => invoke<void>("account_prepare_dir", { dir }),
+
+  // Theming / config (~/.tcon)
+  themesScan: () => invoke<import("./theming/types").ThemeCatalog>("themes_scan"),
+  themeLoad: (path: string) => invoke<import("./theming/types").ColorThemeData>("theme_load", { path }),
+  iconThemeLoad: (path: string) => invoke<unknown>("icon_theme_load", { path }),
+  themeAsset: (path: string) => invoke<string>("theme_asset", { path }),
+  configInit: () => invoke<string>("config_init"),
+  configRead: (name: string) => invoke<string>("config_read", { name }),
+  configWrite: (name: string, content: string) => invoke<void>("config_write", { name, content }),
 
   // FS
   fsListDir: (path: string, showHidden = false) => invoke<FsEntry[]>("fs_list_dir", { path, showHidden }),

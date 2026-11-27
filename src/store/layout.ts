@@ -1,34 +1,23 @@
-// Pure helpers for the split layout tree.
+// Pure helpers for the terminal split tree inside a terminal tab.
 import type { LayoutNode } from "../types";
 
 export const uid = () => crypto.randomUUID();
 
-export type Leaf = Extract<LayoutNode, { type: "terminal" | "editor" }>;
+export type Leaf = Extract<LayoutNode, { type: "terminal" }>;
 
-export function leafKey(n: Leaf): string {
-  return n.type === "terminal" ? n.paneId : n.id;
-}
-
-export function leaves(node: LayoutNode | null): Leaf[] {
+export function paneIds(node: LayoutNode | null): string[] {
   if (!node) return [];
-  if (node.type === "split") return node.children.flatMap(leaves);
-  return [node];
+  if (node.type === "split") return node.children.flatMap(paneIds);
+  return [node.paneId];
 }
 
-function matches(n: LayoutNode, key: string) {
-  return n.type !== "split" && leafKey(n) === key;
-}
+const isPane = (n: LayoutNode, id: string) => n.type === "terminal" && n.paneId === id;
 
-/** Insert `leaf` next to the leaf identified by `targetKey` (or at root when null). */
-export function insertLeaf(
-  root: LayoutNode | null,
-  targetKey: string | null,
-  leaf: Leaf,
-  direction: "row" | "column",
-): LayoutNode {
+/** Insert `paneId` next to `targetId` (or at the root when the target isn't in the tree). */
+export function insertPane(root: LayoutNode | null, targetId: string | null, paneId: string, direction: "row" | "column"): LayoutNode {
+  const leaf: Leaf = { type: "terminal", paneId };
   if (!root) return leaf;
-  if (!targetKey || !leaves(root).some((l) => leafKey(l) === targetKey)) {
-    // append to root
+  if (!targetId || !paneIds(root).includes(targetId)) {
     if (root.type === "split" && root.direction === direction) {
       const children = [...root.children, leaf];
       return { ...root, children, sizes: equal(children.length) };
@@ -36,11 +25,9 @@ export function insertLeaf(
     return { type: "split", id: uid(), direction, children: [root, leaf], sizes: [50, 50] };
   }
   const walk = (n: LayoutNode): LayoutNode => {
-    if (matches(n, targetKey)) {
-      return { type: "split", id: uid(), direction, children: [n, leaf], sizes: [50, 50] };
-    }
+    if (isPane(n, targetId)) return { type: "split", id: uid(), direction, children: [n, leaf], sizes: [50, 50] };
     if (n.type !== "split") return n;
-    const idx = n.children.findIndex((c) => matches(c, targetKey));
+    const idx = n.children.findIndex((c) => isPane(c, targetId));
     if (idx >= 0 && n.direction === direction) {
       const children = [...n.children];
       children.splice(idx + 1, 0, leaf);
@@ -51,14 +38,14 @@ export function insertLeaf(
   return walk(root);
 }
 
-export function removeLeaf(root: LayoutNode | null, key: string): LayoutNode | null {
+export function removePane(root: LayoutNode | null, id: string): LayoutNode | null {
   if (!root) return null;
-  if (matches(root, key)) return null;
+  if (isPane(root, id)) return null;
   if (root.type !== "split") return root;
   const kept: LayoutNode[] = [];
   const sizes: number[] = [];
   root.children.forEach((c, i) => {
-    const r = removeLeaf(c, key);
+    const r = removePane(c, id);
     if (r) {
       kept.push(r);
       sizes.push(root.sizes[i] ?? 0);
@@ -70,19 +57,33 @@ export function removeLeaf(root: LayoutNode | null, key: string): LayoutNode | n
   return { ...root, children: kept, sizes: sizes.map((s) => (s / total) * 100) };
 }
 
-export function replaceLeaf(root: LayoutNode | null, key: string, next: Leaf): LayoutNode | null {
-  if (!root) return null;
-  if (matches(root, key)) return next;
+export function setSizes(root: LayoutNode, splitId: string, sizes: number[]): LayoutNode {
   if (root.type !== "split") return root;
-  return { ...root, children: root.children.map((c) => replaceLeaf(c, key, next) as LayoutNode) };
-}
-
-export function setSizes(root: LayoutNode | null, splitId: string, sizes: number[]): LayoutNode | null {
-  if (!root || root.type !== "split") return root;
   if (root.id === splitId) return { ...root, sizes };
-  return { ...root, children: root.children.map((c) => setSizes(c, splitId, sizes) as LayoutNode) };
+  return { ...root, children: root.children.map((c) => setSizes(c, splitId, sizes)) };
 }
 
-function equal(n: number) {
+/** Drop leaves that don't satisfy `keep` (used to migrate legacy layouts with editor leaves). */
+export function sanitize(node: unknown, keep: (paneId: string) => boolean): LayoutNode | null {
+  const n = node as { type?: string; paneId?: string; id?: string; direction?: "row" | "column"; children?: unknown[]; sizes?: number[] } | null;
+  if (!n) return null;
+  if (n.type === "terminal") return n.paneId && keep(n.paneId) ? { type: "terminal", paneId: n.paneId } : null;
+  if (n.type !== "split" || !Array.isArray(n.children)) return null;
+  const kept: LayoutNode[] = [];
+  const sizes: number[] = [];
+  n.children.forEach((c, i) => {
+    const r = sanitize(c, keep);
+    if (r) {
+      kept.push(r);
+      sizes.push(n.sizes?.[i] ?? 1);
+    }
+  });
+  if (!kept.length) return null;
+  if (kept.length === 1) return kept[0];
+  const total = sizes.reduce((a, b) => a + b, 0) || 1;
+  return { type: "split", id: n.id ?? uid(), direction: n.direction ?? "row", children: kept, sizes: sizes.map((s) => (s / total) * 100) };
+}
+
+export function equal(n: number) {
   return Array.from({ length: n }, () => 100 / n);
 }

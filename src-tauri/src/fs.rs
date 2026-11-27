@@ -178,8 +178,12 @@ fn debounce_loop(
         let mut paths: Vec<String> = Vec::new();
         let mut seen = std::collections::HashSet::new();
         let mut git = false;
+        // Set when the OS dropped events (FSEvents/inotify overflow) or the batch is too large:
+        // listeners then get an empty `paths` list, which means "rescan everything".
+        let mut rescan = false;
         let mut handle = |ev: notify::Result<notify::Event>| {
-            let Ok(ev) = ev else { return };
+            let Ok(ev) = ev else { rescan = true; return };
+            if ev.need_rescan() { rescan = true; }
             for p in ev.paths {
                 // Map canonical prefix (e.g. /private/var) back to the root the caller used.
                 let p = match p.strip_prefix(&canon_root) {
@@ -188,7 +192,8 @@ fn debounce_loop(
                 };
                 let (include, g) = classify(&orig_root, &p);
                 git |= g;
-                if include && paths.len() < MAX_EVENT_PATHS {
+                if include {
+                    if paths.len() >= MAX_EVENT_PATHS { rescan = true; continue; }
                     let s = p.to_string_lossy().into_owned();
                     if seen.insert(s.clone()) { paths.push(s); }
                 }
@@ -206,7 +211,9 @@ fn debounce_loop(
                 Err(mpsc::RecvTimeoutError::Disconnected) => { closed = true; break; }
             }
         }
-        if !paths.is_empty() || git {
+        if rescan {
+            emit(FsChanged { root: root_key.clone(), paths: Vec::new(), git: true });
+        } else if !paths.is_empty() || git {
             emit(FsChanged { root: root_key.clone(), paths, git });
         }
         if closed { return; }
@@ -258,22 +265,27 @@ impl Watchers {
 
 #[tauri::command]
 pub async fn fs_list_dir(path: String, show_hidden: bool) -> Result<Vec<FsEntry>, String> {
+    crate::security::check_fs_access(&path)?;
     blocking(move || list_dir_sync(&path, show_hidden)).await
 }
 #[tauri::command]
 pub async fn fs_read_text(path: String) -> Result<FileContent, String> {
+    crate::security::check_fs_access(&path)?;
     blocking(move || read_text_sync(&path)).await
 }
 #[tauri::command]
 pub async fn fs_write_text(path: String, content: String) -> Result<(), String> {
+    crate::security::check_fs_access(&path)?;
     blocking(move || write_text_sync(&path, &content)).await
 }
 #[tauri::command]
 pub async fn fs_create_project_dir(path: String, git_init: bool) -> Result<(), String> {
+    crate::security::check_fs_access(&path)?;
     blocking(move || create_project_dir_sync(&path, git_init)).await
 }
 #[tauri::command]
 pub fn fs_watch(app: tauri::AppHandle, state: tauri::State<'_, Watchers>, root: String) -> Result<(), String> {
+    crate::security::check_fs_access(&root)?;
     state.watch_with(&root, move |payload| {
         let _ = app.emit("fs-changed", payload);
     })

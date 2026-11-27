@@ -27,27 +27,44 @@ function cssVar(name: string) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
+const ANSI_KEYS = [
+  "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white",
+  "brightBlack", "brightRed", "brightGreen", "brightYellow", "brightBlue", "brightMagenta", "brightCyan", "brightWhite",
+] as const;
+
+/** xterm theme from the current CSS tokens (set by the theming store). */
 export function terminalTheme(): ITheme {
-  const dark = cssVar("color-scheme") !== "light";
-  const base: ITheme = {
+  const theme: ITheme = {
     background: cssVar("--term-bg"),
     foreground: cssVar("--term-fg"),
-    cursor: cssVar("--accent"),
+    cursor: cssVar("--term-cursor") || cssVar("--accent"),
     cursorAccent: cssVar("--term-bg"),
-    selectionBackground: dark ? "#3a4a66" : "#c8d9f5",
+    selectionBackground: cssVar("--term-selection"),
   };
-  return dark
-    ? {
-        ...base,
-        black: "#1b1d22", red: "#ef6b6b", green: "#6fcf8f", yellow: "#e8c06a", blue: "#6aa7ff", magenta: "#c38cf0", cyan: "#58cfcf", white: "#d7dae0",
-        brightBlack: "#5c6370", brightRed: "#ff8585", brightGreen: "#8be0a6", brightYellow: "#f2d28a", brightBlue: "#8dbcff", brightMagenta: "#d6a8ff", brightCyan: "#7fe0e0", brightWhite: "#ffffff",
-      }
-    : {
-        ...base,
-        black: "#1f2329", red: "#c93c3c", green: "#2a8a50", yellow: "#a87a0c", blue: "#2f6fdb", magenta: "#9446c9", cyan: "#16878a", white: "#c8ccd2",
-        brightBlack: "#6b7380", brightRed: "#e05252", brightGreen: "#38a862", brightYellow: "#c4920f", brightBlue: "#4a86ec", brightMagenta: "#a95fdc", brightCyan: "#1fa3a6", brightWhite: "#ffffff",
-      };
+  for (const k of ANSI_KEYS) {
+    const v = cssVar(`--ansi-${k.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase())}`);
+    if (v) (theme as Record<string, string>)[k] = v;
+  }
+  return theme;
 }
+
+export interface TerminalSettings {
+  fontFamily: string;
+  fontSize: number;
+  lineHeight: number;
+  cursorBlink: boolean;
+  cursorStyle: "block" | "underline" | "bar";
+  scrollback: number;
+}
+
+let termSettings: TerminalSettings = {
+  fontFamily: '"SF Mono", Menlo, Monaco, monospace',
+  fontSize: 13,
+  lineHeight: 1.15,
+  cursorBlink: true,
+  cursorStyle: "block",
+  scrollback: SCROLLBACK,
+};
 
 class TerminalRegistry {
   private entries = new Map<string, Entry>();
@@ -58,14 +75,10 @@ class TerminalRegistry {
     if (entry) return entry;
 
     const term = new Terminal({
-      fontFamily: '"SF Mono", Menlo, Monaco, monospace',
-      fontSize: 13,
-      lineHeight: 1.15,
-      scrollback: SCROLLBACK,
+      ...termSettings,
       allowProposedApi: true,
       macOptionIsMeta: false, // keep Option for special characters (e.g. Hungarian layout)
       macOptionClickForcesSelection: true,
-      cursorBlink: true,
       theme: terminalTheme(),
     });
     const fit = new FitAddon();
@@ -201,6 +214,17 @@ class TerminalRegistry {
   applyTheme() {
     const theme = terminalTheme();
     for (const e of this.entries.values()) e.term.options.theme = theme;
+  }
+
+  /** Font/cursor options from settings.json; refits all visible terminals. */
+  applySettings(next: TerminalSettings) {
+    const changed = (Object.keys(next) as (keyof TerminalSettings)[]).some((k) => next[k] !== termSettings[k]);
+    termSettings = next;
+    if (!changed) return;
+    for (const [id, e] of this.entries) {
+      Object.assign(e.term.options, next);
+      this.fitNow(id);
+    }
   }
 }
 

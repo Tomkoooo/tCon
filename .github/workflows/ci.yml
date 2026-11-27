@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  # Weekly, so newly published advisories show up even without new commits.
+  schedule:
+    - cron: "17 6 * * 1"
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+# No token permissions by default; each job asks for what it needs.
+permissions: {}
+
+jobs:
+  frontend:
+    name: Frontend (typecheck + build)
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx tsc --noEmit
+      - run: npm run build
+      # package.json, Cargo.toml/Cargo.lock and tauri.conf.json must carry the same version
+      - run: npm run version:check
+
+  rust:
+    name: Rust (clippy + test)
+    permissions:
+      contents: read
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Install Tauri Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev libssl-dev
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      # tauri::generate_context!() needs the frontendDist (../dist) to exist at compile time.
+      - name: Build frontend
+        run: |
+          npm ci --ignore-scripts
+          npm run build
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch
+        with:
+          toolchain: stable
+          components: clippy
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: src-tauri
+      # NOTE: `cargo fmt --check` is intentionally not run yet: the code base is not
+      # rustfmt-clean. Run `cargo fmt` in src-tauri once, then add the check here.
+      # NOTE: clippy runs without `-D warnings` until existing warnings are fixed.
+      - name: Clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets
+      - name: Test
+        working-directory: src-tauri
+        run: cargo test
+
+  macos-build:
+    name: macOS build smoke test
+    permissions:
+      contents: read
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: src-tauri
+      - run: npm ci --ignore-scripts
+      - run: npm run tauri build -- --no-bundle
+
+  # Dependency advisories. Blocking: a known vulnerability (npm: high or critical; Rust:
+  # any RustSec vulnerability) fails this job. "Unmaintained"/"unsound" notices are only
+  # warnings. Kept as its own job so a fresh advisory doesn't hide build/test results.
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: npm audit
+        run: npm audit --audit-level=high
+      - uses: taiki-e/install-action@073e1fd0bc889c9aee68dbaaa927cde1b5653a83 # v2.90.11
+        with:
+          tool: cargo-audit
+      - name: cargo audit
+        working-directory: src-tauri
+        run: cargo audit

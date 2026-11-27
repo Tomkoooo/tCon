@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "quick",
+  "description": "IPC for the quick panel window (label `quick`, src-tauri/src/background.rs): read a project's task board, add tasks, list projects, hide itself and open things in the main window. No PTY, fs, git or settings access.",
+  "local": true,
+  "webviews": [
+    "quick"
+  ],
+  "permissions": [
+    "quick-panel",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten"
+  ]
+}

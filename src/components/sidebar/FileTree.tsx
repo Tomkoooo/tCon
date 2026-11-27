@@ -1,15 +1,19 @@
+import { onRefresh, refreshWorkspace } from "../../refresh";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { api } from "../../api";
 import type { FsChangedEvent, FsEntry, GitStatus } from "../../types";
 import { buildDecorIndex, lookupDecor, parentDir, trimSlash } from "./gitDecor";
+import { FileIcon } from "../FileIcon";
+import { Icon } from "../icons";
 import "./sidebar.css";
 
 export interface FileTreeProps {
   root: string;
   gitStatus?: GitStatus | null;
-  onOpenFile(path: string): void;
+  /** preview = single click (VS Code preview tab); false = pinned open */
+  onOpenFile(path: string, preview: boolean): void;
 }
 
 interface Row {
@@ -117,6 +121,12 @@ export function FileTree({ root: rawRoot, gitStatus, onOpenFile }: FileTreeProps
       dirs.forEach((d) => void loadDir(d));
     };
 
+    const offRefresh = onRefresh(root, () => {
+      refreshAll = true;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(flush, 0);
+    });
+
     listen<FsChangedEvent>("fs-changed", (ev) => {
       if (trimSlash(ev.payload.root) !== root) return;
       if (ev.payload.paths.length === 0) refreshAll = true;
@@ -132,6 +142,7 @@ export function FileTree({ root: rawRoot, gitStatus, onOpenFile }: FileTreeProps
       disposed = true;
       if (timer) clearTimeout(timer);
       unlisten?.();
+      offRefresh();
     };
   }, [root, loadDir]);
 
@@ -160,14 +171,14 @@ export function FileTree({ root: rawRoot, gitStatus, onOpenFile }: FileTreeProps
     });
   }, [root]);
 
-  const activate = useCallback((entry: FsEntry) => {
+  const activate = useCallback((entry: FsEntry, preview = true) => {
     setSelected(entry.path);
     if (entry.isDir) setExpanded(entry.path, !expanded.has(entry.path));
-    else onOpenFile(entry.path);
+    else onOpenFile(entry.path, preview);
   }, [expanded, onOpenFile, setExpanded]);
 
   const collapseAll = () => setExpandedByRoot((prev) => ({ ...prev, [root]: [] }));
-  const refresh = resetCache;
+  const refresh = () => refreshWorkspace(root);
 
   // Keep the selected row visible.
   useEffect(() => {
@@ -207,7 +218,7 @@ export function FileTree({ root: rawRoot, gitStatus, onOpenFile }: FileTreeProps
         break;
       case "Enter":
         e.preventDefault();
-        if (cur) activate(cur.entry);
+        if (cur) activate(cur.entry, false);
         break;
     }
   };
@@ -221,24 +232,16 @@ export function FileTree({ root: rawRoot, gitStatus, onOpenFile }: FileTreeProps
         <button
           className={`sb-icon-btn${showHidden ? " sb-active" : ""}`}
           title={showHidden ? "Hide hidden files" : "Show hidden files"}
+          aria-pressed={showHidden}
           onClick={() => setShowHidden((v) => !v)}
         >
-          {/* eye */}
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-            <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" />
-            <circle cx="8" cy="8" r="2" />
-            {!showHidden && <path d="M2 14L14 2" />}
-          </svg>
+          <Icon name={showHidden ? "eye" : "eyeOff"} />
         </button>
-        <button className="sb-icon-btn" title="Refresh" onClick={refresh}>
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-            <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2v3h-3" />
-          </svg>
+        <button className="sb-icon-btn" title="Refresh" aria-label="Refresh" onClick={refresh}>
+          <Icon name="refresh" />
         </button>
-        <button className="sb-icon-btn" title="Collapse all" onClick={collapseAll}>
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-            <path d="M4 10l4-4 4 4" />
-          </svg>
+        <button className="sb-icon-btn" title="Collapse folders" aria-label="Collapse folders" onClick={collapseAll}>
+          <Icon name="collapse" />
         </button>
       </div>
       <div className="sb-scroll sb-tree-list" ref={listRef} tabIndex={0} onKeyDown={onKeyDown}>
@@ -258,14 +261,14 @@ export function FileTree({ root: rawRoot, gitStatus, onOpenFile }: FileTreeProps
                 style={{ paddingLeft: 6 + depth * ROW_INDENT }}
                 title={entry.path}
                 onClick={() => activate(entry)}
+                onDoubleClick={() => !entry.isDir && onOpenFile(entry.path, false)}
               >
                 <span className="sb-twisty">
                   {entry.isDir && (
-                    <svg width="10" height="10" viewBox="0 0 10 10" className={isOpen ? "sb-open" : ""}>
-                      <path d="M3 1.5L7 5L3 8.5" fill="none" stroke="currentColor" strokeWidth="1.3" />
-                    </svg>
+                    <Icon name="chevronRight" size={14} className={isOpen ? "sb-open" : ""} />
                   )}
                 </span>
+                <FileIcon name={entry.name} dir={entry.isDir} open={isOpen} />
                 <span className={`sb-name${entry.name.startsWith(".") ? " sb-dim" : ""}${entry.isSymlink ? " sb-symlink" : ""}`}>
                   {entry.name}
                 </span>

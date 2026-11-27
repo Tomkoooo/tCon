@@ -1,0 +1,25 @@
+/* Update notice (top right, below the tab bar) and the shared download progress bar. */
+.upd-notice {
+  position: fixed; top: calc(var(--tabbar-h) + var(--sp-2)); right: var(--sp-4); z-index: 75;
+  display: flex; align-items: center; gap: var(--sp-3); width: 400px; max-width: calc(100vw - 32px);
+  padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3); border-radius: var(--radius-l);
+  background: var(--menu-bg, var(--bg-2)); color: var(--menu-fg, var(--fg));
+  border: 1px solid var(--menu-border, var(--border));
+  box-shadow: var(--shadow-menu);
+  animation: upd-in .15s ease-out;
+}
+@keyframes upd-in { from { opacity: 0; transform: translateY(-4px); } }
+.upd-icon { display: inline-flex; color: var(--accent); flex: none; }
+.upd-body { flex: 1; min-width: 0; }
+.upd-title { font-weight: 600; }
+.upd-sub { font-size: var(--fs-s); color: var(--fg-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.upd-actions { display: flex; gap: var(--sp-1); flex: none; }
+
+.upd-progress { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; margin-top: 2px; }
+.upd-bar { flex: 1; min-width: 60px; height: 4px; border-radius: 2px; background: var(--bg-3); overflow: hidden; }
+.upd-bar-fill { height: 100%; background: var(--accent); transition: width .2s ease-out; }
+.upd-bar-fill.indeterminate { width: 30%; animation: upd-slide 1.2s ease-in-out infinite; }
+@keyframes upd-slide { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+.upd-progress-text { font-size: var(--fs-xs); color: var(--fg-dim); white-space: nowrap; }
+
+.upd-settings-status { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }

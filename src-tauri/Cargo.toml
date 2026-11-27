@@ -1,9 +1,11 @@
 [package]
 name = "tcon"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2024"
+license = "MIT"
+repository = "https://github.com/Tomkoooo/tCon"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -18,8 +20,12 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+# unstable: Window::add_child for the built-in browser; devtools: its Web Inspector in release builds.
+tauri = { version = "2", features = ["unstable", "devtools", "tray-icon"] }
 tauri-plugin-opener = "2"
+# Background mode (src/background.rs): ⌥⇧Space quick panel from anywhere, launch at login.
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-autostart = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 portable-pty = "0.9.0"
@@ -34,6 +40,19 @@ base64 = "0.23.1"
 tauri-plugin-dialog = "2.8.4"
 tauri-plugin-notification = "2.8.1"
 rusqlite = { version = "0.43.0", features = ["bundled"] }
+sha2 = "0.10"
+# Auto-updates from GitHub releases (signed latest.json) + relaunch after installing.
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+
+# Runtime app icon (src/appicon.rs): window icons from PNG off macOS, the Dock icon via AppKit on macOS.
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+tauri = { version = "2", features = ["image-png"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSImage", "NSResponder", "NSWindow", "NSView", "NSControl", "NSButton"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSData", "NSString"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

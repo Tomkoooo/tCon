@@ -47,7 +47,7 @@ function Split({ node, renderLeaf, onResize }: Props & { node: Extract<LayoutNod
   return (
     <div className={`split ${node.direction}`} ref={ref}>
       {node.children.map((child, i) => (
-        <Fragment key={child.type === "split" ? child.id : child.type === "terminal" ? child.paneId : child.id}>
+        <Fragment key={child.type === "split" ? child.id : child.paneId}>
           {i > 0 && <div className="split-divider" onPointerDown={(e) => startDrag(i - 1, e)} />}
           <div className="split-child" style={{ flex: `${node.sizes[i] ?? 1} 1 0` }}>
             <SplitView node={child} renderLeaf={renderLeaf} onResize={onResize} />

@@ -33,13 +33,33 @@ export interface Pane {
   lastActivity: number;
   exited?: boolean;
   exitCode?: number | null;
+  /** extra env for this pane only (e.g. a login flow for a specific account) */
+  env?: Record<string, string>;
+  /** not persisted across app restarts (e.g. login terminals) */
+  ephemeral?: boolean;
 }
 
-/** Split layout tree inside a project group. */
+/** Split layout tree inside a terminal tab. */
 export type LayoutNode =
   | { type: "terminal"; paneId: string }
-  | { type: "editor"; path: string; id: string }
   | { type: "split"; id: string; direction: "row" | "column"; children: LayoutNode[]; sizes: number[] };
+
+/** A tab in the terminal panel; holds one or more split terminals. */
+export interface TerminalTab { id: string; layout: LayoutNode }
+
+export interface EditorTab {
+  id: string;
+  path: string;
+  /** VS Code-style preview tab: replaced by the next single-click open until pinned. */
+  preview?: boolean;
+  diff?: { file: string | null; staged: boolean } | null;
+  /** non-file editor: "board" = the project's task board (path is virtual), "browser" = a built-in browser page (path = its URL),
+   *  "help" = the Help page (path is virtual), "commit" = one commit's changes (path = "git-commit:<full sha>") */
+  kind?: "board" | "browser" | "help" | "commit";
+}
+export interface EditorGroup { id: string; tabs: EditorTab[]; activeTabId: string | null }
+
+export type PanelPosition = "bottom" | "top" | "left" | "right";
 
 export interface Project {
   id: string;
@@ -48,12 +68,31 @@ export interface Project {
   color: string;
   profileId?: string | null;
   accountLabel?: string | null;
+  /** extra env vars for every terminal in this project (overrides the account / legacy profile) */
+  env?: Record<string, string> | null;
+  /** Claude model override for new sessions (null = global "claude.model" setting) */
+  claudeModel?: string | null;
+  /** dev server URL for "Browser: Open Dev Server" (null = the last one a terminal printed) */
+  browserUrl?: string | null;
   lastInteracted: number;
   panes: Record<string, Pane>;
-  layout: LayoutNode | null;
+  terminalTabs: TerminalTab[];
+  activeTerminalTabId: string | null;
+  /** last focused terminal pane */
   focusedPaneId?: string | null;
+  editorGroups: EditorGroup[];
+  activeEditorGroupId: string | null;
+  editorGroupSizes: number[];
+  /** which area keyboard shortcuts like ⌘W apply to */
+  focusArea: "terminal" | "editor";
+  panelPosition: PanelPosition;
+  /** panel share of the workbench, in percent (when editors are open) */
+  panelSize: number;
+  panelMaximized: boolean;
+  panelHidden: boolean;
   sidebarOpen: boolean;
-  sidebarTab: "files" | "git";
+  sidebarTab: "files" | "git" | "tasks" | "browser";
+  sidebarWidth: number;
 }
 
 export interface RecentPath { path: string; lastUsed: number; pinned: boolean }
@@ -70,8 +109,46 @@ export interface GitStatus {
   behind: number;
   dirty: boolean;
   files: GitFileStatus[];
+  upstream?: string | null;
+  hasRemote: boolean;
+  stashCount: number;
 }
-export interface GitCommit { id: string; shortId: string; summary: string; author: string; time: number; parents: string[]; refs: string[] }
+
+export type GitOp =
+  | { op: "stage"; files: string[] }
+  | { op: "stageAll" }
+  | { op: "unstage"; files: string[] }
+  | { op: "unstageAll" }
+  | { op: "discard"; tracked: string[]; untracked: string[] }
+  | { op: "commit"; message: string; amend: boolean }
+  | { op: "push" }
+  | { op: "pull" }
+  | { op: "fetch" }
+  | { op: "checkout"; branch: string }
+  | { op: "createBranch"; name: string; from?: string | null }
+  | { op: "checkoutDetached"; commit: string }
+  | { op: "stash" }
+  | { op: "stashPop" };
+
+/** A Claude Code login = one CLAUDE_CONFIG_DIR (null = the default ~/.claude). */
+export interface Account { id: string; configDir: string | null }
+
+/** Subset of `claude auth status --json`. */
+export interface AuthStatus {
+  loggedIn: boolean;
+  authMethod?: string;
+  email?: string;
+  orgName?: string;
+  subscriptionType?: string;
+  planTier?: string;
+}
+export type CommitSync = "outgoing" | "incoming" | "local";
+export interface GitCommit { id: string; shortId: string; summary: string; author: string; time: number; parents: string[]; refs: string[]; sync?: CommitSync | null }
+/** git_commit_details: lazily loaded for the graph's hover card. */
+export interface GitCommitDetails {
+  id: string; summary: string; body: string; author: string; authorEmail: string; time: number; parents: string[];
+  filesChanged: number; insertions: number; deletions: number; remoteUrl?: string | null;
+}
 export interface GitBranch { name: string; isRemote: boolean; isHead: boolean; upstream?: string | null; target: string }
 export interface GitWorktree { name: string; path: string; branch?: string | null; isMain: boolean }
 

@@ -35,6 +35,14 @@ struct CwdEvent {
     cwd: String,
 }
 
+/// A local dev-server URL printed by the pane (for the Browser view).
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct DevServerEvent {
+    pane_id: String,
+    url: String,
+}
+
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct ExitEvent {
@@ -79,7 +87,12 @@ impl PtyManager {
         cmd.env("TERM_PROGRAM_VERSION", env!("CARGO_PKG_VERSION"));
         cmd.env("LANG", std::env::var("LANG").unwrap_or_else(|_| "en_US.UTF-8".into()));
         cmd.env_remove("CLAUDECODE"); // don't let nested sessions think they're inside Claude
-        for (k, v) in &opts.env {
+        // tCon's own launch/build variables (TAURI_*, npm_*, signing secrets) stay out of shells.
+        for k in crate::security::inherited_vars_to_strip() {
+            cmd.env_remove(k);
+        }
+        // tCon never injects secrets: the project env editor rejects them, and so does this.
+        for (k, v) in opts.env.iter().filter(|(k, _)| !crate::security::is_secret_env_name(k)) {
             cmd.env(k, v);
         }
 
@@ -99,6 +112,7 @@ impl PtyManager {
         let child2 = child.clone();
         std::thread::Builder::new().name(format!("pty-{pane_id}")).spawn(move || {
             let mut filter = OscFilter::new();
+            let mut dev_urls = crate::browser::devurl::DevUrlScanner::default();
             let mut buf = vec![0u8; 64 * 1024];
             let mut events = Vec::new();
             loop {
@@ -122,6 +136,9 @@ impl PtyManager {
                                 }
                             }
                         }
+                        for url in dev_urls.feed(&out) {
+                            let _ = app.emit_to("main", "dev-server", DevServerEvent { pane_id: pane_id.clone(), url });
+                        }
                         if !out.is_empty() && on_data.send(InvokeResponseBody::Raw(out)).is_err() {
                             break;
                         }
@@ -129,17 +146,25 @@ impl PtyManager {
                 }
             }
             let code = child2.lock().wait().ok().map(|s| s.exit_code());
+            let mut current = true;
             if let Some(state) = tauri::Manager::try_state::<PtyManager>(&app) {
                 let mut sessions = state.sessions.lock();
                 // Only remove if the map still holds *this* session (not a respawn).
-                if sessions.get(&pane_id).is_some_and(|s| Arc::ptr_eq(&s.child, &child2)) {
+                current = sessions.get(&pane_id).is_some_and(|s| Arc::ptr_eq(&s.child, &child2));
+                if current {
                     sessions.remove(&pane_id);
                 }
             }
-            let _ = app.emit("pane-exit", ExitEvent { pane_id: pane_id.clone(), code });
+            // A replaced (respawned) session exiting must not mark the pane as exited.
+            if current {
+                let _ = app.emit("pane-exit", ExitEvent { pane_id: pane_id.clone(), code });
+            }
         })?;
 
-        self.sessions.lock().insert(opts.pane_id, Session { writer, master: pair.master, child });
+        let old = self.sessions.lock().insert(opts.pane_id, Session { writer, master: pair.master, child });
+        if let Some(old) = old {
+            let _ = old.child.lock().kill(); // respawn of a still-running pane
+        }
         Ok(())
     }
 

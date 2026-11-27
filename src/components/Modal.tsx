@@ -1,9 +1,22 @@
 import { useEffect } from "react";
+import { Icon } from "./icons";
 
-export function Modal({ title, onClose, children, actions }: { title: string; onClose(): void; children: React.ReactNode; actions?: React.ReactNode }) {
+export function Modal({
+  title, subtitle, onClose, children, actions, className,
+}: {
+  title: React.ReactNode;
+  subtitle?: React.ReactNode;
+  onClose(): void;
+  children: React.ReactNode;
+  actions?: React.ReactNode;
+  /** e.g. "wide" or "settings-modal" */
+  className?: string;
+}) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        // inputs marked data-esc-clear handle Escape themselves (clear/revert) first
+        if ((e.target as HTMLElement | null)?.dataset?.escClear) return;
         e.stopPropagation();
         onClose();
       }
@@ -14,12 +27,17 @@ export function Modal({ title, onClose, children, actions }: { title: string; on
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" role="dialog" aria-label={title}>
+      <div className={`modal${className ? ` ${className}` : ""}`} role="dialog" aria-modal="true" aria-label={typeof title === "string" ? title : undefined}>
         <div className="modal-head">
-          {title}
+          <div className="modal-title">
+            <span>{title}</span>
+            {subtitle && <span className="modal-subtitle">{subtitle}</span>}
+          </div>
           <span className="spacer" />
           {actions}
-          <button className="icon-btn" onClick={onClose}>×</button>
+          <button className="icon-btn" aria-label="Close" title="Close (Esc)" onClick={onClose}>
+            <Icon name="close" />
+          </button>
         </div>
         {children}
       </div>

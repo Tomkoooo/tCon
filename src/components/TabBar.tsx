@@ -4,6 +4,9 @@ import { INACTIVE_AFTER_MS, PALETTE, projectStatus, useWorkspace } from "../stor
 import type { Project } from "../types";
 import { StatusDot, statusLabel } from "./StatusDot";
 import { useContextMenu } from "./ContextMenu";
+import { AccountChip } from "./AccountChip";
+import { confirmProjectEditors } from "./editor/editorActions";
+import { Icon } from "./icons";
 
 function useNow(intervalMs: number) {
   const [now, setNow] = useState(Date.now());
@@ -41,18 +44,19 @@ export function TabBar() {
           <Tab key={id} project={projects[id]} index={order.indexOf(id)} />
         ))}
         {inactive.length > 0 && (
-          <button className="tab-section" onClick={() => setShowInactive(!showInactive)} title="Projects idle for 30+ minutes">
-            {showInactive ? "▾" : "▸"} Inactive ({inactive.length})
+          <button className="tab-section" onClick={() => setShowInactive(!showInactive)} title="Projects idle for 30 minutes or more">
+            <Icon name={showInactive ? "chevronDown" : "chevronRight"} size={12} /> Inactive {inactive.length}
           </button>
         )}
         {showInactive && inactive.map((id) => <Tab key={id} project={projects[id]} index={order.indexOf(id)} />)}
-        <button className="icon-btn" title="New project tab (⌘T)" onClick={() => setModal({ kind: "newProject" })} style={{ alignSelf: "center" }}>
-          +
+        <button className="icon-btn" title="Open project (⌘T)" aria-label="Open project" onClick={() => setModal({ kind: "newProject" })}>
+          <Icon name="plus" />
         </button>
         <div className="drag-region" data-tauri-drag-region style={{ flex: 1 }} />
       </div>
       <div className="tabbar-actions">
-        <button className="icon-btn" title="Accounts / profiles (⌘,)" onClick={() => setModal({ kind: "profiles" })}>⚙</button>
+        <AccountChip />
+        <button className="icon-btn" title="Settings (⌘,)" aria-label="Settings" onClick={() => setModal({ kind: "profiles" })}><Icon name="gear" /></button>
       </div>
     </div>
   );
@@ -106,8 +110,8 @@ function Tab({ project, index }: { project: Project; index: number }) {
       },
       { label: "Project Settings…", action: () => st.setModal({ kind: "projectSettings", projectId: project.id }) },
       "sep",
-      { label: "New Claude Pane", hint: "⇧⌘C", action: () => st.addPane(project.id, { claude: true }) },
-      { label: "New Shell Pane", hint: "⌘D", action: () => st.addPane(project.id, { claude: false }) },
+      { label: "New Claude Terminal", hint: "⇧⌘C", action: () => st.addTerminal(project.id, { claude: true }) },
+      { label: "New Terminal", hint: "⇧⌘T", action: () => st.addTerminal(project.id, { claude: false }) },
       { label: project.sidebarOpen ? "Hide Sidebar" : "Show Sidebar", hint: "⌘B", action: () => st.updateProject(project.id, { sidebarOpen: !project.sidebarOpen }) },
       "sep",
       { label: "Close Project", action: () => void closeWithConfirm(project) },
@@ -156,8 +160,9 @@ function Tab({ project, index }: { project: Project; index: number }) {
         ) : (
           <span className="tab-name">{project.name}</span>
         )}
-        {attention > 1 && <span className="tab-count">{attention}!</span>}
-        {paneCount > 1 && <span className="tab-count">{paneCount}</span>}
+        {attention > 1 ? (
+          <span className="tab-count attn" title={`${attention} terminals need you`}>{attention}</span>
+        ) : paneCount > 1 && <span className="tab-count" title={`${paneCount} terminals`}>{paneCount}</span>}
         {git?.dirty && <span className="tab-dirty" title="Uncommitted changes" />}
         {badge && (
           <span className="tab-badge" style={{ ["--badge-color" as string]: profile?.color }}>
@@ -166,10 +171,11 @@ function Tab({ project, index }: { project: Project; index: number }) {
         )}
         <button
           className="tab-close"
+          aria-label={`Close ${project.name}`}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={() => void closeWithConfirm(project)}
         >
-          ×
+          <Icon name="close" size={14} />
         </button>
       </div>
       {menu.element}
@@ -181,5 +187,6 @@ export async function closeWithConfirm(project: Project) {
   const st = useWorkspace.getState();
   const busy = Object.keys(project.panes).some((id) => ["working", "blocked"].includes(st.statuses[id]?.state ?? ""));
   if (busy && !(await ask(`"${project.name}" has an active Claude session. Close it anyway?`, { title: "Close project", kind: "warning" }))) return;
+  if (!(await confirmProjectEditors(project.id))) return;
   st.closeProject(project.id);
 }

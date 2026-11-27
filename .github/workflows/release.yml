@@ -1,0 +1,230 @@
+name: Release
+
+# Builds installers for macOS (Apple Silicon + Intel) and Linux, signs the updater bundles and
+# publishes them as a GitHub release tagged v<version>, with that version's CHANGELOG.md section
+# as the release notes.
+#
+# How to cut a release (see CLAUDE.md): `npm run version:bump -- <version|patch|minor|alpha|…>`,
+# fill in the CHANGELOG section, commit, push to main. If a release for the current version
+# already exists, the workflow skips the build, so ordinary merges do not rebuild anything.
+#
+# Release flow: the build jobs upload into a *draft* release; `publish` then writes latest.json
+# (the auto-updater manifest) from the uploaded .sig files and publishes the release. Users
+# therefore never see a release, or an updater manifest, that is missing a platform.
+#
+# Prereleases: the updater reads releases/latest/download/latest.json, and GitHub's "latest"
+# skips prereleases. Below 1.0 every version is an alpha, so 0.x releases (including
+# 0.y.z-alpha.N) are published as normal releases and auto-update. From 1.0 on, versions with a
+# prerelease tag (1.2.0-beta.1) are published as GitHub prereleases and are not auto-updated.
+#
+# Secrets:
+#   TAURI_SIGNING_PRIVATE_KEY           required; the updater key (~/.tauri/tcon-updater.key)
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  optional; empty for the current key
+#   APPLE_*                             optional macOS code signing, see below
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+# No token permissions by default; each job asks for what it needs.
+permissions: {}
+
+jobs:
+  check:
+    name: Check whether this version is already released
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      exists: ${{ steps.v.outputs.exists }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - id: v
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # fails when package.json, Cargo.toml/Cargo.lock and tauri.conf.json disagree
+          version=$(node scripts/bump-version.mjs --check)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          case "$version" in
+            0.*) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+            *-*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+          # A published release means done. A draft left by a failed run is not visible to
+          # this read-only token, so the build reruns and tauri-action reuses that draft.
+          if gh release view "v$version" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null | grep -qx false; then
+            echo "Release v$version already exists; skipping build."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    name: Build (${{ matrix.name }})
+    needs: check
+    if: needs.check.outputs.exists == 'false'
+    permissions:
+      contents: write # create the draft release and upload the installers
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS Apple Silicon
+            platform: macos-latest
+            args: --target aarch64-apple-darwin
+          - name: macOS Intel
+            platform: macos-latest
+            args: --target x86_64-apple-darwin
+          # tauri.conf.json only lists the macOS bundle targets (app, dmg), so the
+          # Linux/Windows bundle formats are chosen here. The AppImage is the auto-updating one.
+          - name: Linux
+            platform: ubuntu-22.04
+            args: --bundles deb,appimage,rpm
+          # Windows is disabled until the PTY shell (/bin/zsh -l) and PATH resolution in
+          # src-tauri/src/{pty,cli}.rs are ported. MSI also rejects prerelease versions
+          # (0.1.0-alpha.1), so use NSIS only. Re-enable with:
+          # - name: Windows
+          #   platform: windows-latest
+          #   args: --bundles nsis
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Install Tauri Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev libssl-dev
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable branch
+        with:
+          toolchain: stable
+          targets: ${{ startsWith(matrix.platform, 'macos') && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.args }}
+
+      - run: npm ci --ignore-scripts
+
+      # Optional macOS code signing + notarization. Each variable is only exported when
+      # the matching repository secret is set; without them the app is built unsigned.
+      # Secrets: APPLE_CERTIFICATE (base64 .p12), APPLE_CERTIFICATE_PASSWORD,
+      # APPLE_SIGNING_IDENTITY, APPLE_ID, APPLE_PASSWORD (app-specific), APPLE_TEAM_ID.
+      - name: Configure optional macOS signing
+        if: startsWith(matrix.platform, 'macos')
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          for v in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [ -n "${!v}" ]; then
+              {
+                echo "$v<<__EOF__"
+                echo "${!v}"
+                echo "__EOF__"
+              } >> "$GITHUB_ENV"
+              echo "$v is set"
+            fi
+          done
+
+      - name: Require the updater signing key
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::Repository secret TAURI_SIGNING_PRIVATE_KEY is not set; updater bundles can't be signed. See CLAUDE.md → Releases."
+            exit 1
+          fi
+
+      # createUpdaterArtifacts (tauri.conf.json) + the signing key make the bundler emit the
+      # updater bundles (macOS .app.tar.gz, Linux AppImage/deb/rpm) with .sig files, which
+      # tauri-action uploads. latest.json is written once by the publish job instead
+      # (includeUpdaterJson: false), so parallel jobs can't overwrite each other's platforms.
+      - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: v__VERSION__
+          releaseName: tCon v__VERSION__
+          releaseBody: Release notes are added when all builds finish.
+          releaseDraft: true
+          prerelease: ${{ needs.check.outputs.prerelease == 'true' }}
+          includeUpdaterJson: false
+          args: ${{ matrix.args }}
+
+  publish:
+    name: Publish release + updater manifest
+    needs: [check, build]
+    if: needs.check.outputs.exists == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # upload latest.json and publish the draft
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Write latest.json and publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.check.outputs.version }}
+          PRERELEASE: ${{ needs.check.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          dir="$RUNNER_TEMP/sigs"
+          mkdir -p "$dir"
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern '*.sig' --dir "$dir"
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/$tag"
+          node scripts/release-notes.mjs "$VERSION" > "$RUNNER_TEMP/notes.md"
+
+          # platform key -> asset-name suffix of the signed updater bundle
+          platforms='{}'
+          add() { # key suffix
+            sig=$(find "$dir" -name "*$2.sig" | head -n1)
+            if [ -z "$sig" ]; then echo "no *$2.sig for $1"; return 1; fi
+            asset=$(basename "$sig" .sig)
+            platforms=$(jq --arg k "$1" --arg url "$base/$asset" --rawfile sig "$sig" \
+              '. + {($k): {signature: $sig, url: $url}}' <<<"$platforms")
+            echo "$1 -> $asset"
+          }
+          add darwin-aarch64 _aarch64.app.tar.gz
+          add darwin-x86_64 _x64.app.tar.gz
+          add linux-x86_64 .AppImage
+          add linux-x86_64-appimage .AppImage
+          add linux-x86_64-deb .deb || true
+          add linux-x86_64-rpm .rpm || true
+
+          jq -n --arg v "$VERSION" --rawfile notes "$RUNNER_TEMP/notes.md" --argjson p "$platforms" \
+            '{version: $v, notes: $notes, pub_date: (now | todate), platforms: $p}' > "$RUNNER_TEMP/latest.json"
+          gh release upload "$tag" "$RUNNER_TEMP/latest.json" --clobber --repo "$GITHUB_REPOSITORY"
+
+          if [ "$PRERELEASE" = "true" ]; then
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --notes-file "$RUNNER_TEMP/notes.md"
+          else
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --latest --notes-file "$RUNNER_TEMP/notes.md"
+          fi
