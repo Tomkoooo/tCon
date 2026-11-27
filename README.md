@@ -69,6 +69,13 @@ It's a native app built with Tauri and Rust, so it starts fast and uses little m
 - Markdown edit / split / preview.
 - **Tracks changes made outside tCon.** When Claude, another editor or a formatter rewrites a file, it reloads, or asks first if you have unsaved edits. There's also a refresh on window focus and on **⇧⌘R**.
 
+### Browser with memory
+- **Built-in pages** open as editor tabs next to your code, with back/forward, an address bar and Web Inspector. Logins and cookies survive restarts, kept in their own store, and can be cleared any time.
+- **tCon Chrome:** real Chrome with its own persistent tCon profile, controlled from the sidebar. It has Chrome DevTools and extensions, including Claude in Chrome, so Claude Code can open your app and test it.
+- **Dev servers are detected automatically** from terminal output, e.g. `Local: http://localhost:5173`; one click opens them.
+- **Import your sessions** from an existing Chrome, Brave, Edge or Chromium profile.
+- A "Use with Claude" helper gives you the `chrome-devtools-mcp` setup for the tCon Chrome profile.
+
 ### Git
 <img src="docs/screenshots/git-graph.png" alt="Source control panel with staged changes and commit graph" width="900">
 
@@ -91,6 +98,12 @@ It's a native app built with Tauri and Rust, so it starts fast and uses little m
 - Custom app icon: pick a built-in variant (Default, Classic, Light, Graphite) or use your own image.
 
 <img src="docs/screenshots/workbench-light.png" alt="tCon in a light theme" width="900">
+
+### Security
+- Settings → Security audits each Claude account: where the login lives (Keychain or a plaintext file), file permissions, and credential files shared between accounts. One click fixes the permissions.
+- A strict CSP. Only tCon's own UI can call its internal commands; browser pages and other content can't, and file commands refuse credential and `~/.ssh` paths.
+- Signed macOS builds use the hardened runtime. CI installs dependencies without install scripts and runs `npm audit` and `cargo audit`.
+- See [SECURITY.md](SECURITY.md) for the honest threat model.
 
 ## Download
 
@@ -120,6 +133,7 @@ Windows support is planned; the PTY and shell setup still need porting.
 | Toggle panel / maximize panel | ⌃\` / ⇧⌘M |
 | Toggle sidebar · Explorer · Source Control | ⌘B · ⇧⌘E · ⇧⌘G |
 | Quick-add task · open task board | ⇧⌘A · ⇧⌘B |
+| Open URL in the browser | ⇧⌘O |
 | Refresh files and git status | ⇧⌘R |
 | Settings | ⌘, |
 
