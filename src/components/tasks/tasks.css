@@ -270,3 +270,17 @@
 .tkd-log li.ok::before { border-color: var(--ok); background: var(--ok); }
 .tkd-log li.warn::before { border-color: var(--warn); background: var(--warn); }
 .tkd-log time { flex: none; color: var(--fg-dim); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; padding-top: 1px; }
+
+/* multi-select */
+.tkb-card.multi { box-shadow: inset 0 0 0 2px var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--bg-2)); }
+.tkb-col-check { margin: 0; width: 13px; height: 13px; accent-color: var(--accent); opacity: 0.5; }
+.tkb-col-header:hover .tkb-col-check, .tkb-col-check:checked { opacity: 1; }
+.tk-bulk {
+  position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); z-index: 25;
+  display: flex; align-items: center; gap: var(--sp-2); max-width: calc(100% - 2 * var(--sp-3)); flex-wrap: wrap;
+  padding: var(--sp-2) var(--sp-3); background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-menu);
+}
+.tk-bulk.compact { position: sticky; left: auto; bottom: 0; transform: none; max-width: none; margin: var(--sp-1); }
+.tk-bulk-count { font-weight: 600; font-size: var(--fs-s); white-space: nowrap; }
+.tk-bulk-warn { font-size: var(--fs-s); color: var(--danger); }
+.tk-row.tk-picked { background: color-mix(in srgb, var(--accent) 14%, transparent); }

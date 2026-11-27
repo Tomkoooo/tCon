@@ -739,6 +739,10 @@ pub fn create(root: &str, title: &str, description: &str, status: &str) -> Resul
 
 pub fn update(root: &str, id: &str, patch: TaskPatch) -> Result<Task, String> {
     let _g = LOCK.lock();
+    update_locked(root, id, patch)
+}
+
+fn update_locked(root: &str, id: &str, patch: TaskPatch) -> Result<Task, String> {
     let mut t = read_task(root, id)?;
     if let Some(v) = patch.title {
         t.title = v.trim().to_string();
@@ -831,6 +835,71 @@ pub fn save_settings(root: &str, settings: BoardSettings) -> Result<Board, Strin
         apply_exclude(root, board.settings.shared)?;
     }
     Ok(board)
+}
+
+/// One operation of [`bulk`]: patch a task, move it to the end of a column, or delete it.
+#[derive(Deserialize, Debug, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct BulkOp {
+    pub id: String,
+    pub patch: Option<TaskPatch>,
+    pub column: Option<String>,
+    pub delete: bool,
+}
+
+/// Apply several task operations under one lock (multi-select on the board). Returns the
+/// board afterwards and the errors of the operations that failed (id, message).
+pub fn bulk(root: &str, ops: Vec<BulkOp>) -> Result<(BoardState, Vec<(String, String)>), String> {
+    let mut failed = Vec::new();
+    {
+        let _g = LOCK.lock();
+        let mut board = read_board(root);
+        let mut order_dirty = false;
+        let (tasks, _) = read_tasks(root);
+        let mut order = reconcile(&board, &tasks);
+        for op in ops {
+            let res: Result<(), String> = (|| {
+                if op.delete {
+                    let p = task_path(root, &op.id)?;
+                    if p.exists() {
+                        fs::remove_file(&p).map_err(|e| e.to_string())?;
+                    }
+                    for v in order.values_mut().chain([&mut board.run_queue, &mut board.batch]) {
+                        v.retain(|x| x != &op.id);
+                    }
+                    order_dirty = true;
+                    return Ok(());
+                }
+                if let Some(patch) = op.patch {
+                    update_locked(root, &op.id, patch)?;
+                }
+                if let Some(col) = op.column {
+                    let Some(title) = board.columns.iter().find(|c| c.id == col).map(|c| c.title.clone()) else {
+                        return Err(format!("unknown column: {col}"));
+                    };
+                    let mut t = read_task(root, &op.id)?;
+                    if t.status != col {
+                        t.status = col.clone();
+                        t.updated = now_iso();
+                        t.sections = append_log(&t.sections, &log_line(&format!("Moved to {title}")));
+                        write_task(root, &t)?;
+                    }
+                    let len = order.get(&col).map(|v| v.len()).unwrap_or(0);
+                    move_in_order(&mut order, &op.id, &col, len);
+                    order_dirty = true;
+                }
+                Ok(())
+            })();
+            if let Err(e) = res {
+                failed.push((op.id, e));
+            }
+        }
+        if order_dirty {
+            board.order = order;
+            write_board(root, &board)?;
+        }
+    }
+    Ok((load(root), failed))
 }
 
 /// Replace the run queue (and the current batch). Unknown ids are dropped.
@@ -932,6 +1001,18 @@ pub async fn task_delete(root: String, id: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn tasks_save_settings(root: String, settings: BoardSettings) -> Result<Board, String> {
     blocking(move || save_settings(&root, settings)).await
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkResult {
+    pub state: BoardState,
+    pub failed: Vec<(String, String)>,
+}
+
+#[tauri::command]
+pub async fn task_bulk(root: String, ops: Vec<BulkOp>) -> Result<BulkResult, String> {
+    blocking(move || bulk(&root, ops).map(|(state, failed)| BulkResult { state, failed })).await
 }
 
 #[tauri::command]
@@ -1120,6 +1201,31 @@ mod tests {
         assert_eq!(b.run_queue, vec!["T-2", "T-1"]);
         assert_eq!(b.batch, vec!["T-1"]);
         assert_eq!(load(&r).board.run_queue, vec!["T-2", "T-1"]);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn bulk_patches_moves_and_deletes() {
+        let root = tmp("bulk");
+        let r = root.to_string_lossy().to_string();
+        for n in ["A", "B", "C"] {
+            create(&r, n, "", "inbox").unwrap();
+        }
+        set_queue(&r, vec!["T-3".into()], None).unwrap();
+        let ops = vec![
+            BulkOp { id: "T-1".into(), patch: Some(TaskPatch { priority: Some("high".into()), ..Default::default() }), column: Some("todo".into()), ..Default::default() },
+            BulkOp { id: "T-2".into(), column: Some("todo".into()), ..Default::default() },
+            BulkOp { id: "T-3".into(), delete: true, ..Default::default() },
+            BulkOp { id: "T-9".into(), column: Some("todo".into()), ..Default::default() },
+        ];
+        let (st, failed) = bulk(&r, ops).unwrap();
+        assert_eq!(st.columns["todo"], vec!["T-1", "T-2"]);
+        assert!(st.columns["inbox"].is_empty());
+        assert_eq!(st.tasks.iter().find(|t| t.id == "T-1").unwrap().priority, "high");
+        assert_eq!(st.tasks.len(), 2);
+        assert!(st.board.run_queue.is_empty());
+        assert_eq!(failed.len(), 1);
+        assert_eq!(failed[0].0, "T-9");
         let _ = fs::remove_dir_all(root);
     }
 

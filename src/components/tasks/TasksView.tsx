@@ -10,6 +10,7 @@ import {
   AgentChip, ClaudeMark, PriorityIcon, StatusIcon, TASK_DRAG, adjustedIndex, dropIndexFor, readDrag, useAgentView, type DragPayload,
 } from "./parts";
 import { Icon } from "../icons";
+import { BulkBar } from "./BulkBar";
 import "./tasks.css";
 
 const COLLAPSE_KEY = "tcon.tasks.collapsed";
@@ -61,6 +62,7 @@ export function boardMenuItems(root: string, state: BoardState | null, opts: { i
           .then((paths) => st.setNotice(`Installed the tcon-tasks skill (${paths.length} location${paths.length === 1 ? "" : "s"}).`))
           .catch((e) => st.setNotice(`Couldn't install the skill: ${e}`, true)),
     },
+    { label: "Plan Inbox with Claude", title: "Plan every Inbox card and move it to Todo, without changing code", action: () => void planTasks(root, state?.columns.inbox ?? []) },
     { label: "Reload Tasks", checked: false, action: () => void st.load(root) },
   ];
 }
@@ -220,8 +222,34 @@ export function TasksView({ root }: { root: string }) {
   const notice = useTasks((s) => s.notice);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(loadCollapsed);
   const [drop, setDrop] = useState<{ column: string; index: number } | null>(null);
+  const [picked, setPicked] = useState<Set<string>>(() => new Set());
+  const [anchor, setAnchor] = useState<string | null>(null);
   const menu = useContextMenu();
   const project = projectForRoot(root);
+
+  /** ⌘/Ctrl-click toggles, ⇧-click selects a range in the column, a plain click opens. */
+  const clickRow = (e: React.MouseEvent, colId: string, id: string) => {
+    if (e.metaKey || e.ctrlKey) {
+      setPicked((p) => {
+        const next = new Set(p);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+      setAnchor(id);
+      return;
+    }
+    const ids = state?.columns[colId] ?? [];
+    if (e.shiftKey && anchor && ids.includes(anchor)) {
+      const a = ids.indexOf(anchor);
+      const b = ids.indexOf(id);
+      setPicked(new Set(ids.slice(Math.min(a, b), Math.max(a, b) + 1)));
+      return;
+    }
+    setPicked(new Set());
+    setAnchor(id);
+    open(id);
+  };
 
   useEffect(() => {
     try {
@@ -292,7 +320,8 @@ export function TasksView({ root }: { root: string }) {
                     dropAfter={drop?.column === col.id && drop.index === i + 1 && i === ids.length - 1}
                     onDragOverRow={(index) => setDrop({ column: col.id, index })}
                     onDropRow={(e, index) => onDrop(e, col.id, index)}
-                    onOpen={() => open(id)}
+                    picked={picked.has(id)}
+                    onClickRow={(e) => clickRow(e, col.id, id)}
                     onMenu={(e) => menu.open(e, taskMenuItems(root, t, state, { open: () => open(id) }))}
                   />
                 );
@@ -301,6 +330,7 @@ export function TasksView({ root }: { root: string }) {
           );
         })}
       </div>
+      {state && picked.size > 0 && <BulkBar compact root={root} state={state} ids={[...picked].filter((id) => byId.has(id))} onClear={() => setPicked(new Set())} />}
       {menu.element}
     </div>
   );
@@ -315,7 +345,8 @@ function TaskRow(props: {
   dropAfter: boolean;
   onDragOverRow(index: number): void;
   onDropRow(e: React.DragEvent, index: number): void;
-  onOpen(): void;
+  picked: boolean;
+  onClickRow(e: React.MouseEvent): void;
   onMenu(e: React.MouseEvent): void;
 }) {
   const { root, task, column, index } = props;
@@ -324,7 +355,7 @@ function TaskRow(props: {
   const active = view.kind === "working" || view.kind === "blocked" || view.kind === "queued" || view.kind === "waiting" || view.kind === "planning";
   return (
     <div
-      className={`tk-row${props.dropBefore ? " tk-drop-before" : ""}${props.dropAfter ? " tk-drop-after" : ""}${dragging ? " tk-dragging" : ""}${task.status === "done" ? " tk-row-done" : ""}`}
+      className={`tk-row${props.picked ? " tk-picked" : ""}${props.dropBefore ? " tk-drop-before" : ""}${props.dropAfter ? " tk-drop-after" : ""}${dragging ? " tk-dragging" : ""}${task.status === "done" ? " tk-row-done" : ""}`}
       title={`${task.id} · ${task.title}${task.description ? `\n\n${task.description.slice(0, 300)}` : ""}`}
       draggable
       onDragStart={(e) => {
@@ -344,7 +375,8 @@ function TaskRow(props: {
         e.stopPropagation();
         props.onDropRow(e, dropIndexFor(e, e.currentTarget, index));
       }}
-      onClick={props.onOpen}
+      onClick={props.onClickRow}
+      onKeyDown={(e) => e.key === "Escape" && e.currentTarget.blur()}
       onContextMenu={props.onMenu}
     >
       <PriorityIcon priority={task.priority} size={12} />

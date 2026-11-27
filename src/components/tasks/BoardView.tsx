@@ -14,6 +14,7 @@ import {
 } from "./parts";
 import { Icon } from "../icons";
 import { QueueControl, RunQueuePanel, queueCounts } from "./RunQueue";
+import { BulkBar } from "./BulkBar";
 import "./tasks.css";
 
 const isTyping = (t: EventTarget | null) => {
@@ -38,6 +39,8 @@ export function BoardView({ project }: { project: Project }) {
   const [drop, setDrop] = useState<{ column: string; index: number } | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [queueOpen, setQueueOpen] = useState(false);
+  /** multi-selection (⌘/Ctrl-click, ⇧-click, ⌘A); `selected` stays the focused card */
+  const [picked, setPicked] = useState<Set<string>>(() => new Set());
   const rootRef = useRef<HTMLDivElement>(null);
   const filterRef = useRef<HTMLInputElement>(null);
   const menu = useContextMenu();
@@ -83,7 +86,59 @@ export function BoardView({ project }: { project: Project }) {
     return null;
   };
 
+  // Drop ids that disappeared (deleted, filtered out).
+  useEffect(() => {
+    setPicked((p) => {
+      const all = new Set(Object.values(visible).flat());
+      const next = new Set([...p].filter((id) => all.has(id)));
+      return next.size === p.size ? p : next;
+    });
+  }, [visible]);
+
+  const clickCard = (e: React.MouseEvent, colId: string, id: string) => {
+    if (e.metaKey || e.ctrlKey) {
+      setPicked((p) => {
+        const next = new Set(p);
+        if (!next.size && selected && selected !== id) next.add(selected);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+      setSelected(id);
+      return;
+    }
+    if (e.shiftKey && selected) {
+      const ids = visible[colId] ?? [];
+      const a = ids.indexOf(selected);
+      const b = ids.indexOf(id);
+      if (a >= 0 && b >= 0) {
+        setPicked(new Set(ids.slice(Math.min(a, b), Math.max(a, b) + 1)));
+        return;
+      }
+    }
+    setPicked(new Set());
+    setSelected(id);
+    setOpenTask(root, id);
+  };
+
+  const selectColumn = (colId: string, on: boolean) => {
+    const ids = visible[colId] ?? [];
+    setPicked((p) => {
+      const next = new Set(p);
+      ids.forEach((id) => (on ? next.add(id) : next.delete(id)));
+      return next;
+    });
+  };
+
   const onKeyDown = (e: React.KeyboardEvent) => {
+    if (!isTyping(e.target) && (e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "a") {
+      // ⌘A: every card of the focused column (or of the first non-empty one).
+      e.preventDefault();
+      const pos = locate(selected);
+      const col = pos ? columns[pos[0]] : columns.find((c) => visible[c.id]?.length);
+      if (col) setPicked(new Set(visible[col.id] ?? []));
+      return;
+    }
     if (isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
     const pos = locate(selected);
     const firstNonEmpty = () => columns.findIndex((c) => visible[c.id]?.length);
@@ -111,7 +166,9 @@ export function BoardView({ project }: { project: Project }) {
         }
         break;
       case "Escape":
-        if (openTask) close();
+        if (picked.size) setPicked(new Set());
+        else if (queueOpen) setQueueOpen(false);
+        else if (openTask) close();
         else if (adding) setAdding(null);
         else setSelected(null);
         break;
@@ -243,6 +300,16 @@ export function BoardView({ project }: { project: Project }) {
                 <div className="tkb-col-header">
                   <StatusIcon status={col.id} />
                   <span className="tkb-col-title">{col.title}</span>
+                  {ids.length > 0 && (
+                    <input
+                      type="checkbox"
+                      className="tkb-col-check"
+                      title={`Select all in ${col.title}`}
+                      aria-label={`Select all in ${col.title}`}
+                      checked={ids.every((id) => picked.has(id))}
+                      onChange={(e) => selectColumn(col.id, e.target.checked)}
+                    />
+                  )}
                   <span className="tkb-col-count">{ids.length}</span>
                   <span className="sb-spacer" />
                   <button className="sb-icon-btn" title={`Add to ${col.title}`} aria-label={`Add to ${col.title}`} onClick={() => setAdding(col.id)}>
@@ -274,13 +341,11 @@ export function BoardView({ project }: { project: Project }) {
                         key={id}
                         task={t}
                         selected={selected === id}
+                        multi={picked.has(id)}
                         dragging={draggingId === id}
                         dropBefore={drop?.column === col.id && drop.index === i}
                         dropAfter={drop?.column === col.id && drop.index === i + 1 && i === ids.length - 1}
-                        onSelect={() => {
-                          setSelected(id);
-                          setOpenTask(root, id);
-                        }}
+                        onSelect={(e) => clickCard(e, col.id, id)}
                         onMenu={(e) => {
                           setSelected(id);
                           menu.open(e, taskMenuItems(root, t, state, { open: () => setOpenTask(root, id) }));
@@ -327,10 +392,12 @@ export function BoardView({ project }: { project: Project }) {
         <span><kbd>⇧←→</kbd> move</span>
         <span><kbd>↵</kbd> open</span>
         <span><kbd>C</kbd> Claude</span>
+        <span><kbd>⌘</kbd>/<kbd>⇧</kbd>click, <kbd>⌘A</kbd> multi-select</span>
         <span><kbd>/</kbd> filter</span>
         <span><kbd>Esc</kbd> close</span>
       </div>
 
+      {state && picked.size > 0 && <BulkBar root={root} state={state} ids={[...picked]} onClear={() => { setPicked(new Set()); focusBoard(); }} />}
       {queueOpen && state && <RunQueuePanel root={root} state={state} onClose={() => { setQueueOpen(false); focusBoard(); }} />}
       {openTask && state && <TaskDrawer key={openTask.id} root={root} task={openTask} state={state} onClose={close} />}
       {menu.element}
@@ -341,10 +408,11 @@ export function BoardView({ project }: { project: Project }) {
 function Card(props: {
   task: Task;
   selected: boolean;
+  multi: boolean;
   dragging: boolean;
   dropBefore: boolean;
   dropAfter: boolean;
-  onSelect(): void;
+  onSelect(e: React.MouseEvent): void;
   onMenu(e: React.MouseEvent): void;
   onDragStart(e: React.DragEvent): void;
   onDragEnd(): void;
@@ -360,7 +428,7 @@ function Card(props: {
   return (
     <div
       ref={ref}
-      className={`tkb-card${props.selected ? " selected" : ""}${props.dragging ? " dragging" : ""}${props.dropBefore ? " drop-before" : ""}${props.dropAfter ? " drop-after" : ""}${task.status === "done" ? " done" : ""}`}
+      className={`tkb-card${props.selected ? " selected" : ""}${props.multi ? " multi" : ""}${props.dragging ? " dragging" : ""}${props.dropBefore ? " drop-before" : ""}${props.dropAfter ? " drop-after" : ""}${task.status === "done" ? " done" : ""}`}
       draggable
       onDragStart={props.onDragStart}
       onDragEnd={props.onDragEnd}

@@ -100,3 +100,12 @@ export const PRIORITIES: { id: Priority; label: string }[] = [
   { id: "low", label: "Low" },
   { id: "none", label: "No priority" },
 ];
+
+/** One operation of a multi-select action (task_bulk). */
+export interface BulkOp {
+  id: string;
+  patch?: TaskPatch;
+  /** move to the end of this column */
+  column?: string;
+  delete?: boolean;
+}

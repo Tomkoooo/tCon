@@ -8,6 +8,7 @@ Each release's section becomes its GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- Tasks: select several cards (⌘/Ctrl-click, ⇧-click for a range, ⌘A or the column checkbox for a whole column) on the board or in the Tasks sidebar, then plan them with Claude, start Claude, add them to the queue, set their priority, move or delete them at once. **Tasks: Plan Inbox with Claude** plans every Inbox card.
 - Tasks: a **run queue** per board (Queue button in the board header). Reorder it by dragging, see why each task waits and which tasks start together, and pick a run mode: **Rolling** (keep the agent limit busy), **Batches** (start N, wait for all, then the next N) or **Parallel-safe** (start tasks together whose plans touch different files; tasks without a plan run alone). Tasks wait for their `depends:` tasks to reach Review or Done.
 - Tasks: **Stop after current** lets running agents finish while no new ones start; then **Resume**, or **Next only** to start exactly one. **Stop all now** stops every agent of the board. Also in the command palette, for one board or all of them.
 - Tasks: **Plan with Claude** (card menu and task drawer) starts a planning agent that reads the task and the code, writes a plan with the files it will touch, whether it can run in parallel and what it depends on, sets priority and labels, and moves the card to Todo, without changing any code. Several cards are split across up to the board's agent limit.

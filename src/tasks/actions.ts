@@ -1,7 +1,7 @@
 // Workbench-level task actions used by commands, the sidebar and the board.
 import { useWorkspace } from "../store/workspace";
 import { useTasks } from "./store";
-import { boardRoots, resumeQueue, stopAfterCurrent } from "./agent";
+import { boardRoots, planTasks, resumeQueue, stopAfterCurrent } from "./agent";
 
 const trim = (p: string) => (p.length > 1 ? p.replace(/\/+$/, "") : p);
 
@@ -56,4 +56,15 @@ export function stopAllQueues() {
 }
 export function resumeAllQueues() {
   for (const r of boardRoots()) void resumeQueue(r);
+}
+
+/** Plan every Inbox card of the active board with Claude. */
+export async function planInbox() {
+  const r = activeRoot();
+  if (!r) return;
+  await useTasks.getState().load(r);
+  const ids = useTasks.getState().boards[r.replace(/\/+$/, "")]?.state?.columns.inbox ?? [];
+  if (!ids.length) return useTasks.getState().setNotice("The Inbox is empty.");
+  const n = await planTasks(r, ids);
+  useTasks.getState().setNotice(`Planning ${n} Inbox task${n === 1 ? "" : "s"} with Claude.`);
 }

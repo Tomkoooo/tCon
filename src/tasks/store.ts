@@ -6,7 +6,7 @@ import { useEffect } from "react";
 import { create } from "zustand";
 import { listen } from "@tauri-apps/api/event";
 import { hasBackend, tasksApi } from "./api";
-import { DEFAULT_SETTINGS, type BoardSettings, type BoardState, type Task, type TaskPatch } from "./types";
+import { DEFAULT_SETTINGS, type BoardSettings, type BoardState, type BulkOp, type Task, type TaskPatch } from "./types";
 import type { FsChangedEvent } from "../types";
 import { onRefresh } from "../refresh";
 import { parseQuickInput } from "../quick/parse";
@@ -43,6 +43,8 @@ interface TasksState {
   update(root: string, id: string, patch: TaskPatch): Promise<Task | null>;
   move(root: string, id: string, column: string, index: number): Promise<void>;
   remove(root: string, id: string): Promise<void>;
+  /** Several patches / moves / deletes at once (multi-select). */
+  bulk(root: string, ops: BulkOp[]): Promise<void>;
   saveSettings(root: string, patch: Partial<BoardSettings>): Promise<void>;
   /** Replace the run queue (and optionally the current batch). */
   setQueue(root: string, queue: string[], batch?: string[]): Promise<void>;
@@ -219,6 +221,39 @@ export const useTasks = create<TasksState>((set, get) => {
         fail(e);
       }
       void get().load(root);
+    },
+
+    async bulk(root, ops) {
+      root = trim(root);
+      if (!ops.length) return;
+      const st = get().boards[root]?.state;
+      if (st) {
+        // Optimistic: apply patches, moves and deletes locally.
+        const del = new Set(ops.filter((o) => o.delete).map((o) => o.id));
+        const columns: Record<string, string[]> = {};
+        for (const [k, v] of Object.entries(st.columns)) columns[k] = v.filter((x) => !del.has(x));
+        const tasks = st.tasks.filter((t) => !del.has(t.id)).map((t) => {
+          const op = ops.find((o) => o.id === t.id);
+          if (!op) return t;
+          const { log: _log, ...fields } = op.patch ?? {};
+          const next = { ...t, ...fields } as Task;
+          if (op.column && op.column !== t.status) {
+            for (const k of Object.keys(columns)) columns[k] = columns[k].filter((x) => x !== t.id);
+            columns[op.column] = [...(columns[op.column] ?? []), t.id];
+            next.status = op.column;
+          }
+          return next;
+        });
+        setEntry(root, { state: { ...st, tasks, columns } });
+      }
+      try {
+        const r = await tasksApi.bulk(root, ops);
+        applyState(root, r.state);
+        if (r.failed.length) get().setNotice(r.failed.map(([id, e]) => `${id}: ${e}`).join("\n"), true);
+      } catch (e) {
+        fail(e);
+        void get().load(root);
+      }
     },
 
     async saveSettings(root, patch) {
