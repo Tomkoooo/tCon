@@ -9,6 +9,7 @@ import { terminals } from "../terminal/registry";
 import type { Keybinding } from "../commands";
 import { BUILTIN_THEMES } from "./builtin";
 import { parseJsonc, setJsoncKey } from "./jsonc";
+import { APP_ICON_KEY, applyAppIcon } from "./appIcon";
 import { BUILTIN_ICON_THEME_ID, builtinIconTheme, loadIconTheme, type LoadedIconTheme } from "./iconTheme";
 import { computeSyntax, type TokenRule } from "./syntax";
 import { computeTokens, type ThemeKind } from "./tokens";
@@ -237,7 +238,7 @@ export const useTheming = create<ThemingState>((set, get) => {
   };
 
   const applyAll = async () => {
-    await Promise.all([applyTheme(), applyIconTheme(), applyCustomCss()]);
+    await Promise.all([applyTheme(), applyIconTheme(), applyCustomCss(), applyAppIcon(get().settings[APP_ICON_KEY])]);
   };
 
   return {

@@ -37,6 +37,15 @@ tauri-plugin-dialog = "2.8.4"
 tauri-plugin-notification = "2.8.1"
 rusqlite = { version = "0.43.0", features = ["bundled"] }
 
+# Runtime app icon (src/appicon.rs): window icons from PNG off macOS, the Dock icon via AppKit on macOS.
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+tauri = { version = "2", features = ["image-png"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSImage", "NSResponder"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSData", "NSString"] }
+
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]

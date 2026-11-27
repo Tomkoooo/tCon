@@ -1,3 +1,4 @@
+mod appicon;
 mod cli;
 mod db;
 mod fs;
@@ -137,6 +138,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            appicon::app_set_icon,
+            appicon::app_icon_preview,
             pty_spawn,
             pty_write,
             pty_resize,

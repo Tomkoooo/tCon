@@ -8,6 +8,7 @@ import { BUILTIN_ICON_THEME_ID, BUILTIN_ICON_THEME_LABEL } from "../theming/icon
 import type { ThemeEntry } from "../theming/types";
 import { COMMANDS, effectiveBindings, keyLabel } from "../commands";
 import { CommitInput, Segmented, Select, Toggle } from "./ui";
+import { AppIconPicker } from "./AppIconPicker";
 import { SettingRow, SettingsGroup, SettingsSearch, SettingsSection, matches, useSetting } from "./settingsKit";
 
 const isLight = (t: ThemeEntry) => t.uiTheme === "vs" || t.uiTheme === "hc-light";
@@ -122,6 +123,14 @@ export function AppearanceSection() {
           ))}
           <option value="">None</option>
         </Select>
+      </SettingRow>
+      <SettingRow
+        label="App icon"
+        description={navigator.userAgent.includes("Mac") ? "Changes the Dock icon while tCon runs; the icon in Finder stays the same. A 1024px PNG works best." : "Changes the window icon. Use a PNG (1024px works best)."}
+        settingKey="app.icon"
+        keywords="dock logo image"
+      >
+        <AppIconPicker />
       </SettingRow>
 
       <SettingsGroup title="Fonts" />
