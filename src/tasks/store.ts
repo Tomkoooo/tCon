@@ -34,6 +34,9 @@ interface TasksState {
   openTask: Record<string, string | null>;
   /** last "quick add" request (focuses the capture box when the Tasks view shows) */
   captureAt: number;
+  /** "Import notes" modal open */
+  importOpen: boolean;
+  setImportOpen(v: boolean): void;
   /** transient message for the tasks UI (errors, "skill installed") */
   notice: { text: string; error?: boolean; at: number } | null;
 
@@ -111,7 +114,12 @@ export const useTasks = create<TasksState>((set, get) => {
     prompts: [],
     openTask: {},
     captureAt: 0,
+    importOpen: false,
     notice: null,
+
+    setImportOpen(v) {
+      set({ importOpen: v });
+    },
 
     async load(root) {
       root = trim(root);

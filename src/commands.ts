@@ -7,6 +7,7 @@ import { terminals } from "./terminal/registry";
 import { closeEditors } from "./components/editor/editorActions";
 import { useTheming } from "./theming/store";
 import { refreshWorkspace } from "./refresh";
+import { useTasks } from "./tasks/store";
 import { openBoard, planInbox, quickAddTask, resumeActiveQueue, resumeAllQueues, showTasksView, stopAllQueues, stopQueueAfterCurrent } from "./tasks/actions";
 import { openDevServer, promptOpenUrl, toggleBrowserView } from "./browser/actions";
 import { checkForUpdates } from "./updater";
@@ -117,6 +118,7 @@ export const COMMANDS: Command[] = [
   { id: "tasks.quickAdd", title: "Tasks: Quick Add", run: quickAddTask },
   { id: "tasks.openBoard", title: "Tasks: Open Board", run: () => openBoard() },
   { id: "tasks.showView", title: "Tasks: Show Tasks View", run: () => showTasksView() },
+  { id: "tasks.importNotes", title: "Tasks: Import Notes…", run: () => useTasks.getState().setImportOpen(true) },
   { id: "tasks.planInbox", title: "Tasks: Plan Inbox with Claude", run: () => void planInbox() },
   { id: "tasks.stopAfterCurrent", title: "Tasks: Stop Queue After Current Tasks", run: stopQueueAfterCurrent },
   { id: "tasks.resumeQueue", title: "Tasks: Resume Queue", run: resumeActiveQueue },

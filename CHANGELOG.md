@@ -8,6 +8,7 @@ Each release's section becomes its GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- **Tasks: Import Notes…** (command palette and board menu): paste meeting notes or a memo and Claude splits them into Inbox cards, keeping each item's original text. Send everything to the active project or let Claude distribute the items over your open projects (it asks when unsure), and optionally plan them right after.
 - Task agents survive interruptions. Each agent runs with its own Claude session id; when tCon closes or the Mac restarts, the card shows **Interrupted** and tCon offers to resume it where it stopped (or resumes automatically, Queue panel setting). An agent that exits with an error is resumed up to 3 times with growing pauses before it's marked failed.
 - Usage limits: when Claude reports a usage limit in an agent's terminal, the card shows **Usage limit**, the board's queue stops so new agents don't fail too, and the agent continues a minute after the reset time, or right away when you switch to another account (its conversation is copied to that account).
 - Tasks: **Worktree per task** isolation (Queue panel). Each agent works on its own branch `tcon/T-n` in a git worktree under `~/.tcon/worktrees/`, so parallel agents don't mix changes or commits. Optional setup command (e.g. `npm ci`) and shared `node_modules`. In the task drawer: **Merge** into the current branch, **Open PR** (GitHub CLI) and **Remove worktree** (refuses unmerged or dirty worktrees unless you confirm).

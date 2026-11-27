@@ -6,12 +6,14 @@ import { installTaskWatchers, useTasks } from "../../tasks/store";
 import { installAgentRuntime, resumeAgent, startAgent } from "../../tasks/agent";
 import { hasBackend } from "../../tasks/api";
 import { ClaudeMark } from "./parts";
+import { ImportNotesModal } from "./ImportNotesModal";
 import "./tasks.css";
 
 export function TasksHost() {
   const loaded = useWorkspace((s) => s.loaded);
   const roots = useWorkspace((s) => s.order.map((id) => s.projects[id]?.rootPath).filter(Boolean).join("\n"));
   const prompts = useTasks((s) => s.prompts);
+  const importOpen = useTasks((s) => s.importOpen);
 
   useEffect(() => {
     const a = installTaskWatchers();
@@ -28,11 +30,14 @@ export function TasksHost() {
     for (const r of roots.split("\n").filter(Boolean)) useTasks.getState().ensure(r);
   }, [loaded, roots]);
 
-  if (!prompts.length) return null;
+  const importModal = importOpen ? <ImportNotesModal onClose={() => useTasks.getState().setImportOpen(false)} /> : null;
+  if (!prompts.length) return importModal;
   const projects = useWorkspace.getState().projects;
   const multi = new Set(prompts.map((p) => p.root)).size > 1 || Object.keys(projects).length > 1;
 
   return (
+    <>
+    {importModal}
     <div className="tk-toasts" role="status">
       {prompts.map((p) => {
         const project = Object.values(projects).find((x) => x.rootPath.replace(/\/+$/, "") === p.root);
@@ -62,5 +67,6 @@ export function TasksHost() {
         );
       })}
     </div>
+    </>
   );
 }

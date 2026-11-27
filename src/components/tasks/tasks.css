@@ -319,3 +319,11 @@
 .tka-time { color: var(--fg-dim); }
 .tkd-wt { border-top: 1px dashed var(--border); padding-top: var(--sp-2); }
 .tkd-wt-label { display: inline-flex; align-items: center; gap: var(--sp-1); font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--fg-dim); }
+
+/* import notes modal */
+.tk-import-text { width: 100%; min-height: 220px; resize: vertical; font-family: var(--font-mono); font-size: var(--fs-s); user-select: text; }
+.tk-import-opts { display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; }
+.tk-import-projects { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); }
+.tk-import-project { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-s); }
+.tk-import-dot { width: 8px; height: 8px; border-radius: 50%; }
+.tk-import-hint { font-size: var(--fs-xs); color: var(--fg-dim); }

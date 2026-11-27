@@ -62,6 +62,7 @@ export function boardMenuItems(root: string, state: BoardState | null, opts: { i
           .then((paths) => st.setNotice(`Installed the tcon-tasks skill (${paths.length} location${paths.length === 1 ? "" : "s"}).`))
           .catch((e) => st.setNotice(`Couldn't install the skill: ${e}`, true)),
     },
+    { label: "Import Notes as Tasks…", title: "Paste notes; Claude splits them into Inbox cards", action: () => st.setImportOpen(true) },
     { label: "Plan Inbox with Claude", title: "Plan every Inbox card and move it to Todo, without changing code", action: () => void planTasks(root, state?.columns.inbox ?? []) },
     { label: "Reload Tasks", checked: false, action: () => void st.load(root) },
   ];
