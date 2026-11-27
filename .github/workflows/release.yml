@@ -45,7 +45,7 @@ jobs:
       exists: ${{ steps.v.outputs.exists }}
       prerelease: ${{ steps.v.outputs.prerelease }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - id: v
@@ -69,9 +69,48 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
+  # One draft release for all build jobs. Letting each tauri-action job create the release
+  # races: parallel jobs each created their own draft and split the assets between them.
+  prepare:
+    name: Create the draft release
+    needs: check
+    if: needs.check.outputs.exists == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create (or reuse) the draft release
+    outputs:
+      release_id: ${{ steps.r.outputs.id }}
+    steps:
+      - id: r
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.check.outputs.version }}
+          PRERELEASE: ${{ needs.check.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          # Reuse a draft left by an earlier failed run; delete duplicate drafts for the same tag.
+          ids=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.draft and .tag_name == \"$tag\") | .id")
+          id=$(printf '%s\n' "$ids" | sed -n 1p)
+          for extra in $(printf '%s\n' "$ids" | sed -n '2,$p'); do
+            echo "Deleting duplicate draft $extra"
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$extra"
+          done
+          if [ -z "$id" ]; then
+            id=$(gh api -X POST "repos/$GITHUB_REPOSITORY/releases" \
+              -f tag_name="$tag" -f target_commitish="$GITHUB_SHA" -f name="tCon $tag" \
+              -f body="Release notes are added when all builds finish." \
+              -F draft=true -F prerelease="$PRERELEASE" --jq .id)
+            echo "Created draft $id"
+          else
+            echo "Reusing draft $id"
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build (${{ matrix.name }})
-    needs: check
+    needs: [check, prepare]
     if: needs.check.outputs.exists == 'false'
     permissions:
       contents: write # create the draft release and upload the installers
@@ -98,7 +137,7 @@ jobs:
           #   args: --bundles nsis
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -108,7 +147,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev libssl-dev
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -162,30 +201,26 @@ jobs:
       # createUpdaterArtifacts (tauri.conf.json) + the signing key make the bundler emit the
       # updater bundles (macOS .app.tar.gz, Linux AppImage/deb/rpm) with .sig files, which
       # tauri-action uploads. latest.json is written once by the publish job instead
-      # (includeUpdaterJson: false), so parallel jobs can't overwrite each other's platforms.
-      - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
+      # (uploadUpdaterJson: false), so parallel jobs can't overwrite each other's platforms.
+      - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: v__VERSION__
-          releaseName: tCon v__VERSION__
-          releaseBody: Release notes are added when all builds finish.
-          releaseDraft: true
-          prerelease: ${{ needs.check.outputs.prerelease == 'true' }}
-          includeUpdaterJson: false
+          releaseId: ${{ needs.prepare.outputs.release_id }}
+          uploadUpdaterJson: false
           args: ${{ matrix.args }}
 
   publish:
     name: Publish release + updater manifest
-    needs: [check, build]
+    needs: [check, prepare, build]
     if: needs.check.outputs.exists == 'false'
     runs-on: ubuntu-latest
     permissions:
       contents: write # upload latest.json and publish the draft
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Write latest.json and publish
