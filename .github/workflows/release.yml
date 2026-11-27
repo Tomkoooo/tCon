@@ -212,6 +212,17 @@ jobs:
           uploadUpdaterJson: false
           args: ${{ matrix.args }}
 
+      # An unsigned or half-signed bundle opens as "damaged" on Apple Silicon. tauri.conf.json
+      # signs ad-hoc ("-") unless APPLE_SIGNING_IDENTITY is set; fail loudly if that regresses.
+      - name: Verify the macOS app signature
+        if: startsWith(matrix.platform, 'macos')
+        run: |
+          set -euo pipefail
+          app=$(find src-tauri/target -path '*/release/bundle/macos/*.app' -maxdepth 6 -type d | head -n1)
+          echo "Checking $app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign -dv "$app" 2>&1 | grep -E 'Signature|Sealed Resources'
+
   publish:
     name: Publish release + updater manifest
     needs: [check, prepare, build]

@@ -81,7 +81,10 @@ const NODE_BG = "var(--sidebar-bg, var(--bg-2))";
 
 /** One row of the graph: lanes, curved fork/merge connectors and the node (dot, merge ring, or HEAD circle). */
 const GraphCell = memo(function GraphCell({ row, lanes, sync, head }: { row: GraphRow; lanes: number; sync?: string | null; head: boolean }) {
-  const w = lanes * LANE_W + GEOM.pad * 2;
+  // Size each row to the lanes it actually draws (like VS Code), so the message and ref badges
+  // sit right next to the commit dot instead of aligning to the widest row. `lanes` caps it.
+  const used = row.segments.reduce((m, s) => Math.max(m, s.x1 + 1, s.x2 + 1), Math.max(row.width, row.lane + 1));
+  const w = Math.min(lanes, used) * LANE_W + GEOM.pad * 2;
   const cx = laneX(row.lane, GEOM);
   const cy = ROW_H / 2;
   const col = graphColor(row.color);
@@ -106,6 +109,15 @@ const GraphCell = memo(function GraphCell({ row, lanes, sync, head }: { row: Gra
     </svg>
   );
 });
+
+/** Graph rows show a short subject (the hover card has the full message), so ref badges stay visible. */
+const SUBJECT_MAX = 40;
+function shortSubject(summary: string): string {
+  if (summary.length <= SUBJECT_MAX) return summary;
+  const cut = summary.slice(0, SUBJECT_MAX);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > SUBJECT_MAX * 0.6 ? cut.slice(0, space) : cut).replace(/[\s,.:;(-]+$/, "")}…`;
+}
 
 const relPath = (file: GitFileStatus) => trimSlash(file.path.includes(" -> ") ? file.path.split(" -> ")[1] : file.path);
 
@@ -670,7 +682,7 @@ export function GitPanel({ root: rawRoot, gitStatus, onOpenDiff, onOpenFile }: G
                   onDoubleClick={() => commitActions.openChanges(c)}
                 >
                   <GraphCell row={row} lanes={graphLanes} sync={c.sync} head={isHead} />
-                  <span className="sb-graph-summary">{c.summary}</span>
+                  <span className="sb-graph-summary">{shortSubject(c.summary)}</span>
                   {pills.length > 0 && <RefPills pills={pills} color={row.color} />}
                   {c.sync === "outgoing" && <span className="sb-sync-badge" title={SYNC_NOTE.outgoing}><Icon name="arrowUp" size={12} /></span>}
                   {c.sync === "incoming" && <span className="sb-sync-badge" title={SYNC_NOTE.incoming}><Icon name="arrowDown" size={12} /></span>}

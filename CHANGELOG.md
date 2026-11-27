@@ -7,6 +7,15 @@ Each release's section becomes its GitHub release notes.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.2] - 2026-11-27
+
+### Changed
+- Git graph: each row is only as wide as the lanes it draws, so commit messages and branch badges sit right next to the graph, as in VS Code.
+- Git graph: rows show a shortened commit subject so branch badges stay readable; hover a commit for the full message.
+
+### Fixed
+- macOS: the app bundle is now signed (ad-hoc when no Developer ID is configured). The alpha.1 download only had a linker signature on the executable, so Apple Silicon Macs reported the app as damaged and refused to open it.
+
 ## [0.1.0-alpha.1] - 2026-11-27
 
 The first public alpha. macOS (Apple Silicon and Intel) and Linux.
@@ -33,5 +42,6 @@ The first public alpha. macOS (Apple Silicon and Intel) and Linux.
 - **Auto-update:** tCon checks GitHub for signed updates on launch and every 6 hours, shows a notice with the release notes, and installs and restarts when you choose. "Check for Updates…" is in the app menu and in Settings → Updates.
 - **Releases and CI:** signed updater bundles, typecheck, build, tests, clippy, `npm audit` and `cargo audit` on every push.
 
-[Unreleased]: https://github.com/Tomkoooo/tCon/compare/v0.1.0-alpha.1...HEAD
+[Unreleased]: https://github.com/Tomkoooo/tCon/compare/v0.1.0-alpha.2...HEAD
+[0.1.0-alpha.2]: https://github.com/Tomkoooo/tCon/compare/v0.1.0-alpha.1...v0.1.0-alpha.2
 [0.1.0-alpha.1]: https://github.com/Tomkoooo/tCon/releases/tag/v0.1.0-alpha.1
