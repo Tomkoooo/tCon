@@ -248,7 +248,13 @@ pub fn account_prepare_dir(dir: String) -> Result<(), String> {
         let src = base.join(item);
         let dst = dir.join(item);
         if src.exists() && std::fs::symlink_metadata(&dst).is_err() {
+            #[cfg(unix)]
             std::os::unix::fs::symlink(&src, &dst).map_err(e2s)?;
+            #[cfg(windows)]
+            {
+                if src.is_dir() { std::os::windows::fs::symlink_dir(&src, &dst) } else { std::os::windows::fs::symlink_file(&src, &dst) }
+                    .map_err(e2s)?;
+            }
         }
     }
     Ok(())

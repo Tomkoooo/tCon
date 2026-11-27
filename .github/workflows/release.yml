@@ -60,9 +60,11 @@ jobs:
           - name: Linux
             platform: ubuntu-22.04
             args: --bundles deb,appimage,rpm
-          - name: Windows
-            platform: windows-latest
-            args: --bundles nsis,msi
+          # Windows is disabled until the PTY shell (/bin/zsh -l) and PATH resolution in
+          # src-tauri/src/{pty,cli}.rs are ported. Re-enable with:
+          # - name: Windows
+          #   platform: windows-latest
+          #   args: --bundles nsis,msi
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
