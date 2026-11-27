@@ -30,7 +30,13 @@ pub struct GitStatus {
 
 #[derive(Serialize, Default, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct GitCommit { pub id: String, pub short_id: String, pub summary: String, pub author: String, pub time: i64, pub parents: Vec<String>, pub refs: Vec<String> }
+pub struct GitCommit {
+    pub id: String, pub short_id: String, pub summary: String, pub author: String, pub time: i64, pub parents: Vec<String>, pub refs: Vec<String>,
+    /// "outgoing" = on HEAD but not pushed to its upstream (or to any remote if unpublished),
+    /// "incoming" = on the upstream but not pulled yet, "local" = unpushed commit on another branch,
+    /// None = in sync with a remote.
+    pub sync: Option<String>,
+}
 
 #[derive(Serialize, Default, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -172,9 +178,48 @@ fn ref_map(repo: &Repository) -> HashMap<Oid, Vec<String>> {
     map
 }
 
+/// Commits reachable from `include` but from none of `exclude` (capped).
+fn reach_diff(repo: &Repository, include: &[Oid], exclude: &[Oid], cap: usize) -> std::collections::HashSet<Oid> {
+    let mut set = std::collections::HashSet::new();
+    let Ok(mut walk) = repo.revwalk() else { return set };
+    for o in include { let _ = walk.push(*o); }
+    for o in exclude { let _ = walk.hide(*o); }
+    for oid in walk.flatten().take(cap) { set.insert(oid); }
+    set
+}
+
+struct SyncSets { outgoing: std::collections::HashSet<Oid>, incoming: std::collections::HashSet<Oid>, local: std::collections::HashSet<Oid> }
+
+fn sync_sets(repo: &Repository, cap: usize) -> SyncSets {
+    let remote_tips: Vec<Oid> = repo.references_glob("refs/remotes/*").map(|it| it.flatten().filter_map(|r| r.target()).collect()).unwrap_or_default();
+    let mut sets = SyncSets { outgoing: Default::default(), incoming: Default::default(), local: Default::default() };
+    if remote_tips.is_empty() { return sets; } // no remotes: nothing to be "in sync" with
+    let head = repo.head().ok();
+    let head_oid = head.as_ref().and_then(|h| h.target());
+    let upstream = head.as_ref()
+        .filter(|h| h.is_branch())
+        .and_then(|h| h.name().ok().map(|n| n.to_string()))
+        .and_then(|n| repo.branch_upstream_name(&n).ok())
+        .and_then(|u| u.as_str().ok().map(|s| s.to_string()))
+        .and_then(|u| repo.refname_to_id(&u).ok());
+    if let Some(h) = head_oid {
+        match upstream {
+            Some(u) => {
+                sets.outgoing = reach_diff(repo, &[h], &[u], cap);
+                sets.incoming = reach_diff(repo, &[u], &[h], cap);
+            }
+            None => sets.outgoing = reach_diff(repo, &[h], &remote_tips, cap), // unpublished branch
+        }
+    }
+    let locals: Vec<Oid> = repo.references_glob("refs/heads/*").map(|it| it.flatten().filter_map(|r| r.target()).collect()).unwrap_or_default();
+    sets.local = reach_diff(repo, &locals, &remote_tips, cap);
+    sets
+}
+
 pub(crate) fn log_sync(path: &str, limit: usize) -> Result<Vec<GitCommit>, String> {
     let Some(repo) = open(path) else { return Ok(vec![]) };
     let refs = ref_map(&repo);
+    let sync = sync_sets(&repo, limit * 4);
     let mut walk = repo.revwalk().map_err(e2s)?;
     walk.set_sorting(Sort::TOPOLOGICAL | Sort::TIME).map_err(e2s)?;
     let _ = walk.push_head();
@@ -194,6 +239,10 @@ pub(crate) fn log_sync(path: &str, limit: usize) -> Result<Vec<GitCommit>, Strin
             time: c.time().seconds() * 1000,
             parents: c.parent_ids().map(|p| p.to_string()).collect(),
             refs: refs.get(&oid).cloned().unwrap_or_default(),
+            sync: if sync.outgoing.contains(&oid) { Some("outgoing".into()) }
+                else if sync.incoming.contains(&oid) { Some("incoming".into()) }
+                else if sync.local.contains(&oid) { Some("local".into()) }
+                else { None },
         });
     }
     Ok(out)

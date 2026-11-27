@@ -329,3 +329,21 @@
 .sb-change:hover .sb-row-actions { display: inline-flex; }
 .sb-row-actions .sb-icon-btn { width: 20px; height: 20px; }
 .sb-change { padding-right: 8px; }
+
+/* ---------- commit sync state (graph) ---------- */
+.sb-git { --sync-out: #e8a33d; --sync-in: #4fb5e8; --sync-local: #b884f0; }
+.sb-graph-row.sb-sync-outgoing { background: color-mix(in srgb, var(--sync-out) 9%, transparent); box-shadow: inset 2px 0 0 var(--sync-out); }
+.sb-graph-row.sb-sync-outgoing .sb-graph-summary { color: var(--fg); font-weight: 600; }
+.sb-graph-row.sb-sync-incoming { background: color-mix(in srgb, var(--sync-in) 8%, transparent); box-shadow: inset 2px 0 0 var(--sync-in); }
+.sb-graph-row.sb-sync-incoming .sb-graph-summary { color: var(--sync-in); font-style: italic; }
+.sb-graph-row.sb-sync-local { box-shadow: inset 2px 0 0 color-mix(in srgb, var(--sync-local) 70%, transparent); }
+.sb-graph-row.sb-sync-local .sb-graph-summary { color: color-mix(in srgb, var(--sync-local) 70%, var(--fg)); }
+.sb-sync-badge { flex: none; margin-left: 6px; font-size: 11px; font-weight: 700; }
+.sb-sync-outgoing .sb-sync-badge { color: var(--sync-out); }
+.sb-sync-incoming .sb-sync-badge { color: var(--sync-in); }
+.sb-sync-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 5px 12px; font-size: 11px; color: var(--fg-dim); border-bottom: 1px solid var(--border); }
+.sb-sync-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.sb-sync-legend i { width: 8px; height: 8px; border-radius: 50%; }
+.sb-sync-legend .sb-sync-outgoing i { background: var(--sync-out); }
+.sb-sync-legend .sb-sync-incoming i { border: 1.5px dashed var(--sync-in); width: 7px; height: 7px; }
+.sb-sync-legend .sb-sync-local i { background: var(--sync-local); }

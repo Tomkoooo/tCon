@@ -113,7 +113,14 @@ function parseRefs(refs: string[], remoteNames: Set<string>): RefChip[] {
   return out;
 }
 
-const GraphCell = memo(function GraphCell({ row, lanes }: { row: GraphRow; lanes: number }) {
+const SYNC_COLOR: Record<string, string> = { outgoing: "var(--sync-out)", incoming: "var(--sync-in)", local: "var(--sync-local)" };
+const SYNC_TITLE: Record<string, string> = {
+  outgoing: "Local commit — not pushed yet",
+  incoming: "Incoming — on the remote, not pulled yet",
+  local: "Local only — on an unpublished/unpushed branch",
+};
+
+const GraphCell = memo(function GraphCell({ row, lanes, sync }: { row: GraphRow; lanes: number; sync?: string | null }) {
   const w = lanes * LANE_W + 4;
   const x = (lane: number) => lane * LANE_W + LANE_W / 2 + 2;
   const y = (f: number) => f * ROW_H;
@@ -128,7 +135,12 @@ const GraphCell = memo(function GraphCell({ row, lanes }: { row: GraphRow; lanes
         const d = `M${x(s.x1)} ${y(s.y1)} C${x(s.x1)} ${ym} ${x(s.x2)} ${ym} ${x(s.x2)} ${y(s.y2)}`;
         return <path key={i} d={d} fill="none" stroke={col(s.color)} strokeWidth={1.5} />;
       })}
-      {row.isMerge ? (
+      {sync === "incoming" ? (
+        // incoming: hollow dashed node, like a "ghost" commit you don't have yet
+        <circle cx={x(row.lane)} cy={ROW_H / 2} r={3.5} fill="var(--bg-2)" stroke={SYNC_COLOR.incoming} strokeWidth={1.5} strokeDasharray="2 1.5" />
+      ) : sync ? (
+        <circle cx={x(row.lane)} cy={ROW_H / 2} r={4} fill={SYNC_COLOR[sync]} stroke="var(--bg-2)" strokeWidth={1} />
+      ) : row.isMerge ? (
         <circle cx={x(row.lane)} cy={ROW_H / 2} r={3} fill="var(--bg-2)" stroke={col(row.color)} strokeWidth={1.5} />
       ) : (
         <circle cx={x(row.lane)} cy={ROW_H / 2} r={3.5} fill={col(row.color)} />
@@ -243,6 +255,11 @@ export function GitPanel({ root: rawRoot, gitStatus, onOpenDiff, onOpenFile }: G
     () => Math.min(MAX_GRAPH_LANES, graph.reduce((m, r) => Math.max(m, r.width), 1)),
     [graph],
   );
+  const syncCounts = useMemo(() => {
+    const c = { outgoing: 0, incoming: 0, local: 0, total: 0 };
+    for (const x of commits) if (x.sync) { c[x.sync]++; c.total++; }
+    return c;
+  }, [commits]);
   const remoteNames = useMemo(() => new Set(branches.filter((b) => b.isRemote).map((b) => b.name)), [branches]);
 
   const files = gitStatus?.files ?? [];
@@ -514,6 +531,13 @@ export function GitPanel({ root: rawRoot, gitStatus, onOpenDiff, onOpenFile }: G
 
         <Section id="graph" title="Graph" count={commits.length || undefined} open={open.graph} onToggle={toggle} grow>
           <div className="sb-graph">
+            {syncCounts.total > 0 && (
+              <div className="sb-sync-legend">
+                {syncCounts.outgoing > 0 && <span className="sb-sync-outgoing"><i />{syncCounts.outgoing} to push</span>}
+                {syncCounts.incoming > 0 && <span className="sb-sync-incoming"><i />{syncCounts.incoming} to pull</span>}
+                {syncCounts.local > 0 && <span className="sb-sync-local"><i />{syncCounts.local} on unpushed branches</span>}
+              </div>
+            )}
             {error && <div className="sb-empty sb-error">{error}</div>}
             {!loaded && <div className="sb-empty">Loading…</div>}
             {loaded && !error && graph.length === 0 && <div className="sb-empty">No commits.</div>}
@@ -523,16 +547,18 @@ export function GitPanel({ root: rawRoot, gitStatus, onOpenDiff, onOpenFile }: G
               return (
                 <div
                   key={c.id}
-                  className="sb-graph-row"
-                  title={`${c.shortId}  ${c.author}\n${new Date(c.time > 1e12 ? c.time : c.time * 1000).toLocaleString()}\n\n${c.summary}`}
+                  className={`sb-graph-row${c.sync ? ` sb-sync-${c.sync}` : ""}`}
+                  title={`${c.shortId}  ${c.author}\n${new Date(c.time > 1e12 ? c.time : c.time * 1000).toLocaleString()}${c.sync ? `\n${SYNC_TITLE[c.sync]}` : ""}\n\n${c.summary}`}
                 >
-                  <GraphCell row={row} lanes={graphLanes} />
+                  <GraphCell row={row} lanes={graphLanes} sync={c.sync} />
                   <span className="sb-graph-text">
                     {chips.map((ch, i) => (
                       <span key={i} className={`sb-chip sb-chip-${ch.kind}`}>{ch.label}</span>
                     ))}
                     <span className="sb-graph-summary">{c.summary}</span>
                   </span>
+                  {c.sync === "outgoing" && <span className="sb-sync-badge" title={SYNC_TITLE.outgoing}>↑</span>}
+                  {c.sync === "incoming" && <span className="sb-sync-badge" title={SYNC_TITLE.incoming}>↓</span>}
                   <span className="sb-graph-author">{c.author}</span>
                   <span className="sb-graph-time">{relTime(c.time)}</span>
                 </div>

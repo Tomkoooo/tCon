@@ -320,4 +320,46 @@ mod tests {
 
         std::fs::remove_dir_all(&tmp).ok();
     }
+
+    #[test]
+    fn log_marks_sync_state() {
+        let tmp = std::env::temp_dir().join(format!("tcon-sync-{}", uuid::Uuid::new_v4()));
+        let remote = tmp.join("remote.git");
+        let (a, b) = (tmp.join("a"), tmp.join("b"));
+        std::fs::create_dir_all(&tmp).unwrap();
+        let t = tmp.to_str().unwrap();
+        git(t, &["init", "-q", "--bare", "-b", "main", remote.to_str().unwrap()]).unwrap();
+        let setup = |dir: &std::path::Path| {
+            let d = dir.to_str().unwrap();
+            git(d, &["config", "user.email", "t@example.com"]).unwrap();
+            git(d, &["config", "user.name", "t"]).unwrap();
+            git(d, &["config", "commit.gpgsign", "false"]).unwrap();
+        };
+        git(t, &["clone", "-q", remote.to_str().unwrap(), a.to_str().unwrap()]).unwrap();
+        setup(&a);
+        let ad = a.to_str().unwrap();
+        git(ad, &["switch", "-q", "-c", "main"]).ok();
+        git(ad, &["commit", "-q", "--allow-empty", "-m", "base"]).unwrap();
+        git(ad, &["push", "-q", "-u", "origin", "main"]).unwrap();
+
+        git(t, &["clone", "-q", remote.to_str().unwrap(), b.to_str().unwrap()]).unwrap();
+        setup(&b);
+        let bd = b.to_str().unwrap();
+        git(bd, &["commit", "-q", "--allow-empty", "-m", "theirs"]).unwrap();
+        git(bd, &["push", "-q"]).unwrap();
+
+        git(ad, &["commit", "-q", "--allow-empty", "-m", "mine"]).unwrap();
+        git(ad, &["fetch", "-q"]).unwrap();
+        git(ad, &["switch", "-q", "-c", "side"]).unwrap();
+        git(ad, &["commit", "-q", "--allow-empty", "-m", "side-only"]).unwrap();
+        git(ad, &["switch", "-q", "main"]).unwrap();
+
+        let log = crate::git::log_sync(ad, 50).unwrap();
+        let state = |msg: &str| log.iter().find(|c| c.summary == msg).map(|c| c.sync.clone()).expect(msg);
+        assert_eq!(state("mine"), Some("outgoing".into()));
+        assert_eq!(state("theirs"), Some("incoming".into()));
+        assert_eq!(state("side-only"), Some("local".into()));
+        assert_eq!(state("base"), None);
+        std::fs::remove_dir_all(&tmp).ok();
+    }
 }

@@ -132,7 +132,8 @@ export interface AuthStatus {
   subscriptionType?: string;
   planTier?: string;
 }
-export interface GitCommit { id: string; shortId: string; summary: string; author: string; time: number; parents: string[]; refs: string[] }
+export type CommitSync = "outgoing" | "incoming" | "local";
+export interface GitCommit { id: string; shortId: string; summary: string; author: string; time: number; parents: string[]; refs: string[]; sync?: CommitSync | null }
 export interface GitBranch { name: string; isRemote: boolean; isHead: boolean; upstream?: string | null; target: string }
 export interface GitWorktree { name: string; path: string; branch?: string | null; isMain: boolean }
 
