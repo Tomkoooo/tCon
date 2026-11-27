@@ -7,6 +7,7 @@ import { closeEditors } from "../editor/editorActions";
 import { FileIcon } from "../FileIcon";
 import { useContextMenu } from "../ContextMenu";
 import { dragResize } from "./drag";
+import { BoardView } from "../tasks/BoardView";
 
 const DRAG_TYPE = "text/tcon-editor-tab";
 const baseName = (p: string) => p.slice(p.lastIndexOf("/") + 1);
@@ -96,7 +97,7 @@ function EditorGroupView({ project, group, canSplit }: { project: Project; group
         {group.tabs.map((t) => (
           // All tabs stay mounted so unsaved buffers survive tab switches.
           <div key={t.id} className="ed-tab-body" style={{ display: t.id === group.activeTabId ? undefined : "none" }}>
-            <EditorPane tabId={t.id} path={t.path} root={project.rootPath} diff={t.diff} />
+            {t.kind === "board" ? <BoardView project={project} /> : <EditorPane tabId={t.id} path={t.path} root={project.rootPath} diff={t.diff} />}
           </div>
         ))}
         {drop && <div className={`ed-drop-overlay ${drop}`} />}
@@ -111,7 +112,7 @@ function EditorTabButton({ project, group, tab, index }: { project: Project; gro
   const menu = useContextMenu();
   const [dragOver, setDragOver] = useState(false);
   const active = tab.id === group.activeTabId;
-  const name = tab.diff && !tab.diff.file ? "Changes" : baseName(tab.path);
+  const name = tab.kind === "board" ? "Tasks" : tab.diff && !tab.diff.file ? "Changes" : baseName(tab.path);
   const rel = tab.path.startsWith(project.rootPath + "/") ? tab.path.slice(project.rootPath.length + 1) : tab.path;
   // Disambiguate same-named files with their parent folder (VS Code style).
   const dupe = group.tabs.some((t) => t.id !== tab.id && baseName(t.path) === baseName(tab.path));
@@ -160,10 +161,16 @@ function EditorTabButton({ project, group, tab, index }: { project: Project; gro
         onAuxClick={(e) => e.button === 1 && close()}
         onContextMenu={onContextMenu}
       >
-        <FileIcon name={baseName(tab.path) || name} />
+        {tab.kind === "board" ? (
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--claude)" strokeWidth="1.3" style={{ flex: "none" }}>
+            <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" /><path d="M6 2.5v11M10.5 2.5v6" />
+          </svg>
+        ) : (
+          <FileIcon name={baseName(tab.path) || name} />
+        )}
         <span className="ed-tab-name">{name}</span>
         {tab.diff && <span className="ed-tab-desc">{tab.diff.staged ? "staged" : "diff"}</span>}
-        {!tab.diff && dupe && parent && <span className="ed-tab-desc">{parent}</span>}
+        {!tab.diff && !tab.kind && dupe && parent && <span className="ed-tab-desc">{parent}</span>}
         <button className="ed-tab-close" title="Close (⌘W)" onMouseDown={(e) => e.stopPropagation()} onClick={close}>
           <svg className="x" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
             <path d="M4 4l8 8M12 4l-8 8" />

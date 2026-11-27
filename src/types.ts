@@ -53,6 +53,8 @@ export interface EditorTab {
   /** VS Code-style preview tab: replaced by the next single-click open until pinned. */
   preview?: boolean;
   diff?: { file: string | null; staged: boolean } | null;
+  /** non-file editor: "board" = the project's task board (path is virtual) */
+  kind?: "board";
 }
 export interface EditorGroup { id: string; tabs: EditorTab[]; activeTabId: string | null }
 
@@ -82,7 +84,7 @@ export interface Project {
   panelMaximized: boolean;
   panelHidden: boolean;
   sidebarOpen: boolean;
-  sidebarTab: "files" | "git";
+  sidebarTab: "files" | "git" | "tasks";
   sidebarWidth: number;
 }
 

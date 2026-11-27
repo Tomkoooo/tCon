@@ -3,9 +3,10 @@ import type { GitStatus } from "../../types";
 import { FileTree } from "./FileTree";
 import { GitPanel } from "./GitPanel";
 import { refreshWorkspace } from "../../refresh";
+import { TasksSection, TasksTitleActions, TasksView } from "../tasks/TasksView";
 import "./sidebar.css";
 
-export type SidebarTab = "files" | "git";
+export type SidebarTab = "files" | "git" | "tasks";
 
 export interface SidebarProps {
   root: string;
@@ -18,7 +19,7 @@ export interface SidebarProps {
 export function Sidebar({ root, gitStatus, tab, onOpenFile, onOpenDiff }: SidebarProps) {
   // Keep a tab mounted once it has been shown so its state (expanded folders,
   // loaded log) survives tab switches.
-  const [mounted, setMounted] = useState<Record<SidebarTab, boolean>>({ files: tab === "files", git: tab === "git" });
+  const [mounted, setMounted] = useState<Record<SidebarTab, boolean>>({ files: tab === "files", git: tab === "git", tasks: tab === "tasks" });
   useEffect(() => {
     setMounted((m) => (m[tab] ? m : { ...m, [tab]: true }));
   }, [tab]);
@@ -28,7 +29,7 @@ export function Sidebar({ root, gitStatus, tab, onOpenFile, onOpenDiff }: Sideba
   return (
     <div className="sb-root">
       <div className="sb-title">
-        {tab === "files" ? "Explorer" : "Source Control"}
+        {tab === "files" ? "Explorer" : tab === "tasks" ? "Tasks" : "Source Control"}
         {tab === "git" && changeCount > 0 && <span className="sb-count">{changeCount}</span>}
         {tab === "git" && (
           <button className="sb-icon-btn" style={{ marginLeft: "auto" }} title="Refresh git status, graph and open files from disk" onClick={() => refreshWorkspace(root)}>
@@ -37,6 +38,7 @@ export function Sidebar({ root, gitStatus, tab, onOpenFile, onOpenDiff }: Sideba
             </svg>
           </button>
         )}
+        {tab === "tasks" && <TasksTitleActions root={root} />}
       </div>
       <div className="sb-content">
         {(mounted.files || tab === "files") && (
@@ -47,6 +49,12 @@ export function Sidebar({ root, gitStatus, tab, onOpenFile, onOpenDiff }: Sideba
         {(mounted.git || tab === "git") && (
           <div className="sb-pane" hidden={tab !== "git"}>
             <GitPanel root={root} gitStatus={gitStatus} onOpenDiff={onOpenDiff} onOpenFile={(p) => onOpenFile(p, false)} />
+            <TasksSection root={root} />
+          </div>
+        )}
+        {(mounted.tasks || tab === "tasks") && (
+          <div className="sb-pane" hidden={tab !== "tasks"}>
+            <TasksView root={root} />
           </div>
         )}
       </div>

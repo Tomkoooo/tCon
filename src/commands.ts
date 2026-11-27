@@ -5,6 +5,7 @@ import { terminals } from "./terminal/registry";
 import { closeEditors } from "./components/editor/editorActions";
 import { useTheming } from "./theming/store";
 import { refreshWorkspace } from "./refresh";
+import { openBoard, quickAddTask, showTasksView } from "./tasks/actions";
 
 export interface Keybinding { key: string; command: string; when?: string; args?: unknown }
 
@@ -49,7 +50,7 @@ function activeEditorTab() {
   return p && g?.activeTabId ? { p, g, tabId: g.activeTabId } : null;
 }
 
-const toggleView = (tab: "files" | "git") =>
+const toggleView = (tab: "files" | "git" | "tasks") =>
   withProject((id) => {
     const p = ws().projects[id];
     ws().updateProject(id, { sidebarOpen: !(p.sidebarOpen && p.sidebarTab === tab), sidebarTab: tab });
@@ -108,6 +109,9 @@ export const COMMANDS: Command[] = [
   { id: "workbench.view.explorer", title: "Show Explorer", run: toggleView("files") },
   { id: "workbench.view.scm", title: "Show Source Control", run: toggleView("git") },
   { id: "workbench.action.reloadThemes", title: "Rescan Themes", run: () => void useTheming.getState().rescan() },
+  { id: "tasks.quickAdd", title: "Tasks: Quick Add", run: quickAddTask },
+  { id: "tasks.openBoard", title: "Tasks: Open Board", run: () => openBoard() },
+  { id: "tasks.showView", title: "Tasks: Show Tasks View", run: () => showTasksView() },
 ];
 
 export const COMMAND_MAP = new Map(COMMANDS.map((c) => [c.id, c]));
@@ -141,6 +145,8 @@ export const DEFAULT_KEYBINDINGS: Keybinding[] = [
   { key: "cmd+b", command: "workbench.action.toggleSidebarVisibility" },
   { key: "cmd+shift+e", command: "workbench.view.explorer" },
   { key: "cmd+shift+g", command: "workbench.view.scm" },
+  { key: "cmd+shift+a", command: "tasks.quickAdd" },
+  { key: "cmd+shift+b", command: "tasks.openBoard" },
 ];
 
 // ---------------- key normalization ----------------

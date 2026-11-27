@@ -1,0 +1,452 @@
+// Sidebar "Tasks" view: always-ready quick capture on top, then a compact list grouped by column
+// with drag & drop. Built for jotting things down fast during a meeting.
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useBoard, useTasks } from "../../tasks/store";
+import { installSkill, openAgentTerminal, projectForRoot, startAgent, stopAgent, livePane } from "../../tasks/agent";
+import { openBoard, quickAddTask } from "../../tasks/actions";
+import { PRIORITIES, type BoardState, type Task } from "../../tasks/types";
+import { useContextMenu, type MenuItem } from "../ContextMenu";
+import {
+  AgentChip, ClaudeMark, PriorityIcon, StatusIcon, TASK_DRAG, adjustedIndex, dropIndexFor, readDrag, useAgentView, type DragPayload,
+} from "./parts";
+import "./tasks.css";
+
+const COLLAPSE_KEY = "tcon.tasks.collapsed";
+function loadCollapsed(): Record<string, boolean> {
+  try {
+    return JSON.parse(localStorage.getItem(COLLAPSE_KEY) ?? "") ?? { done: true };
+  } catch {
+    return { done: true };
+  }
+}
+
+// ---------------- shared menus ----------------
+
+/** Board-level ⋯ menu (sidebar title, board header). */
+export function boardMenuItems(root: string, state: BoardState | null): MenuItem[] {
+  const st = useTasks.getState();
+  const s = state?.board.settings ?? { askOnTodo: false, maxAgents: 1, shared: false };
+  const project = projectForRoot(root);
+  const check = (on: boolean, label: string) => `${on ? "✓" : " "} ${label}`;
+  return [
+    ...(project ? [{ label: "Open Board", action: () => openBoard(project.id) }, "sep" as const] : []),
+    { label: check(s.askOnTodo, "Ask to start Claude on new Todo tasks"), action: () => void st.saveSettings(root, { askOnTodo: !s.askOnTodo }) },
+    ...[1, 2, 3, 4].map((n) => ({
+      label: check(s.maxAgents === n, `Max ${n} concurrent agent${n > 1 ? "s" : ""}`),
+      action: () => void st.saveSettings(root, { maxAgents: n }),
+    })),
+    "sep",
+    {
+      label: check(s.shared, "Share board via git"),
+      hint: s.shared ? "" : ".git/info/exclude",
+      action: () => void st.saveSettings(root, { shared: !s.shared }),
+    },
+    {
+      label: "Install tCon task skill",
+      action: () =>
+        void installSkill()
+          .then((paths) => st.setNotice(`Installed the tcon-tasks skill for Claude Code (${paths.length} location${paths.length === 1 ? "" : "s"}).`))
+          .catch((e) => st.setNotice(`Couldn't install the skill: ${e}`, true)),
+    },
+    { label: "Reload Tasks", action: () => void st.load(root) },
+  ];
+}
+
+/** Per-task context menu (sidebar rows, board cards). */
+export function taskMenuItems(root: string, task: Task, state: BoardState | null, extra: { open?: () => void } = {}): MenuItem[] {
+  const st = useTasks.getState();
+  const alive = !!livePane(task);
+  const running = task.agent === "running" || task.agent === "blocked" || task.agent === "queued";
+  const items: MenuItem[] = [];
+  if (extra.open) items.push({ label: "Open", hint: "↵", action: extra.open });
+  items.push(running && (alive || task.agent === "queued")
+    ? { label: task.agent === "queued" ? "Remove from Agent Queue" : "Stop Agent", action: () => void stopAgent(root, task.id) }
+    : { label: "Let Claude Work on This", action: () => void startAgent(root, task.id) });
+  if (alive) items.push({ label: "Open Agent Terminal", action: () => openAgentTerminal(root, task.id) });
+  items.push("sep");
+  for (const c of state?.board.columns ?? []) {
+    if (c.id !== task.status) items.push({ label: `Move to ${c.title}`, action: () => void st.move(root, task.id, c.id, Number.MAX_SAFE_INTEGER) });
+  }
+  items.push("sep");
+  for (const p of PRIORITIES) {
+    items.push({ label: `${task.priority === p.id ? "✓" : " "} ${p.label}`, action: () => void st.update(root, task.id, { priority: p.id }) });
+  }
+  items.push("sep", { label: "Delete Task", action: () => void confirmDelete(root, task) });
+  return items;
+}
+
+export async function confirmDelete(root: string, task: Task) {
+  if (!window.confirm(`Delete ${task.id} "${task.title}"? This removes .tcon/tasks/${task.id}.md.`)) return;
+  if (livePane(task)) await stopAgent(root, task.id);
+  await useTasks.getState().remove(root, task.id);
+}
+
+/** Buttons shown in the sidebar title row while the Tasks view is active. */
+export function TasksTitleActions({ root }: { root: string }) {
+  const { state } = useBoard(root);
+  const menu = useContextMenu();
+  const project = projectForRoot(root);
+  return (
+    <span className="tk-title-actions">
+      {project && (
+        <button className="sb-icon-btn" title="Open Board" onClick={() => openBoard(project.id)}>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+            <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" /><path d="M6 2.5v11M10.5 2.5v6" />
+          </svg>
+        </button>
+      )}
+      <button className="sb-icon-btn" title="More actions" onClick={(e) => menu.open(e, boardMenuItems(root, state))}>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="3.5" cy="8" r="1.2" /><circle cx="8" cy="8" r="1.2" /><circle cx="12.5" cy="8" r="1.2" /></svg>
+      </button>
+      {menu.element}
+    </span>
+  );
+}
+
+// ---------------- capture ----------------
+
+export function QuickCapture({ root, column = "inbox", autoFocusAt }: { root: string; column?: string; autoFocusAt?: number }) {
+  const [title, setTitle] = useState("");
+  const [details, setDetails] = useState("");
+  const [showDetails, setShowDetails] = useState(false);
+  const [target, setTarget] = useState(column);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const detailsRef = useRef<HTMLTextAreaElement>(null);
+  const [flash, setFlash] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (autoFocusAt && Date.now() - autoFocusAt < 3000) requestAnimationFrame(() => titleRef.current?.focus());
+  }, [autoFocusAt]);
+
+  const submit = async () => {
+    const t = title.trim();
+    if (!t) return;
+    setTitle("");
+    setDetails("");
+    setShowDetails(false);
+    titleRef.current?.focus();
+    const created = await useTasks.getState().create(root, t, details, target);
+    if (created) {
+      setFlash(`${created.id} added`);
+      window.setTimeout(() => setFlash(null), 1400);
+    }
+  };
+
+  return (
+    <div className="tk-capture">
+      <div className="tk-capture-row">
+        <input
+          ref={titleRef}
+          className="tk-capture-input"
+          placeholder="Capture a task… ↵ to add"
+          value={title}
+          spellCheck
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && e.shiftKey) {
+              e.preventDefault();
+              setShowDetails(true);
+              requestAnimationFrame(() => detailsRef.current?.focus());
+            } else if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              void submit();
+            } else if (e.key === "Escape") {
+              setTitle("");
+              setShowDetails(false);
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+        />
+      </div>
+      {showDetails && (
+        <textarea
+          ref={detailsRef}
+          className="tk-capture-details"
+          placeholder="Details, who reported it, steps… (⌘↵ to add)"
+          rows={3}
+          value={details}
+          onChange={(e) => setDetails(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              void submit();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              titleRef.current?.focus();
+            }
+          }}
+        />
+      )}
+      <div className="tk-capture-meta">
+        <button className="tk-link" onClick={() => {
+          setShowDetails((v) => !v);
+          if (!showDetails) requestAnimationFrame(() => detailsRef.current?.focus());
+        }}>
+          {showDetails ? "− details" : "+ details"} <span className="tk-kbd">⇧↵</span>
+        </button>
+        <span className="sb-spacer" />
+        {flash ? <span className="tk-flash">{flash}</span> : (
+          <span className="tk-target" title="Column new tasks go to">
+            to
+            {(["inbox", "todo"] as const).map((c) => (
+              <button key={c} className={`tk-target-btn${target === c ? " on" : ""}`} onClick={() => setTarget(c)}>
+                {c === "inbox" ? "Inbox" : "Todo"}
+              </button>
+            ))}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------- list ----------------
+
+export function TasksView({ root }: { root: string }) {
+  const { state, error, loading } = useBoard(root);
+  const captureAt = useTasks((s) => s.captureAt);
+  const notice = useTasks((s) => s.notice);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(loadCollapsed);
+  const [drop, setDrop] = useState<{ column: string; index: number } | null>(null);
+  const menu = useContextMenu();
+  const project = projectForRoot(root);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(COLLAPSE_KEY, JSON.stringify(collapsed));
+    } catch {
+      /* storage unavailable */
+    }
+  }, [collapsed]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const t = window.setTimeout(() => useTasks.getState().setNotice(null), notice.error ? 8000 : 3500);
+    return () => window.clearTimeout(t);
+  }, [notice]);
+
+  const byId = useMemo(() => new Map((state?.tasks ?? []).map((t) => [t.id, t])), [state]);
+  const open = (id: string) => project && openBoard(project.id, id);
+
+  const onDrop = (e: React.DragEvent, column: string, index: number) => {
+    const d = readDrag(e);
+    setDrop(null);
+    if (!d || d.root !== root) return;
+    e.preventDefault();
+    void useTasks.getState().move(root, d.id, column, adjustedIndex(d, column, index));
+  };
+
+  return (
+    <div className="tk-view">
+      <QuickCapture root={root} autoFocusAt={captureAt} />
+      {notice && <div className={`tk-notice${notice.error ? " tk-notice-error" : ""}`} onClick={() => useTasks.getState().setNotice(null)}>{notice.text}</div>}
+      <div className="tk-list" onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setDrop(null)}>
+        {error && <div className="sb-empty sb-error">{error}</div>}
+        {!state && loading && <div className="sb-empty">Loading…</div>}
+        {state && state.tasks.length === 0 && (
+          <div className="tk-empty">
+            <ClaudeMark size={18} />
+            <div>No tasks yet.</div>
+            <div className="tk-empty-sub">Type above and press ↵. Tasks live in <code>.tcon/tasks/</code>, so Claude can read and update them.</div>
+          </div>
+        )}
+        {state && state.tasks.length > 0 && state.board.columns.map((col) => {
+          const ids = state.columns[col.id] ?? [];
+          const isCollapsed = !!collapsed[col.id];
+          return (
+            <div key={col.id} className="tk-group">
+              <div
+                className={`tk-group-header${drop?.column === col.id && (isCollapsed || !ids.length) ? " tk-drop-into" : ""}`}
+                onClick={() => setCollapsed((c) => ({ ...c, [col.id]: !c[col.id] }))}
+                onDragOver={(e) => {
+                  if (!e.dataTransfer.types.includes(TASK_DRAG)) return;
+                  e.preventDefault();
+                  setDrop({ column: col.id, index: isCollapsed ? 0 : ids.length });
+                }}
+                onDrop={(e) => onDrop(e, col.id, isCollapsed ? 0 : ids.length)}
+              >
+                <svg width="10" height="10" viewBox="0 0 10 10" className={`sb-chevron${isCollapsed ? "" : " sb-open"}`}>
+                  <path d="M3 1.5L7 5L3 8.5" fill="none" stroke="currentColor" strokeWidth="1.3" />
+                </svg>
+                <StatusIcon status={col.id} size={12} />
+                <span className="tk-group-title">{col.title}</span>
+                <span className="sb-count">{ids.length}</span>
+              </div>
+              {!isCollapsed && ids.map((id, i) => {
+                const t = byId.get(id);
+                if (!t) return null;
+                return (
+                  <TaskRow
+                    key={id}
+                    root={root}
+                    task={t}
+                    column={col.id}
+                    index={i}
+                    dropBefore={drop?.column === col.id && drop.index === i}
+                    dropAfter={drop?.column === col.id && drop.index === i + 1 && i === ids.length - 1}
+                    onDragOverRow={(index) => setDrop({ column: col.id, index })}
+                    onDropRow={(e, index) => onDrop(e, col.id, index)}
+                    onOpen={() => open(id)}
+                    onMenu={(e) => menu.open(e, taskMenuItems(root, t, state, { open: () => open(id) }))}
+                  />
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+      {menu.element}
+    </div>
+  );
+}
+
+function TaskRow(props: {
+  root: string;
+  task: Task;
+  column: string;
+  index: number;
+  dropBefore: boolean;
+  dropAfter: boolean;
+  onDragOverRow(index: number): void;
+  onDropRow(e: React.DragEvent, index: number): void;
+  onOpen(): void;
+  onMenu(e: React.MouseEvent): void;
+}) {
+  const { root, task, column, index } = props;
+  const view = useAgentView(task);
+  const [dragging, setDragging] = useState(false);
+  const active = view.kind === "working" || view.kind === "blocked" || view.kind === "queued" || view.kind === "waiting";
+  return (
+    <div
+      className={`tk-row${props.dropBefore ? " tk-drop-before" : ""}${props.dropAfter ? " tk-drop-after" : ""}${dragging ? " tk-dragging" : ""}${task.status === "done" ? " tk-row-done" : ""}`}
+      title={`${task.id} · ${task.title}${task.description ? `\n\n${task.description.slice(0, 300)}` : ""}`}
+      draggable
+      onDragStart={(e) => {
+        const payload: DragPayload = { root, id: task.id, column, index };
+        e.dataTransfer.setData(TASK_DRAG, JSON.stringify(payload));
+        e.dataTransfer.effectAllowed = "move";
+        setDragging(true);
+      }}
+      onDragEnd={() => setDragging(false)}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes(TASK_DRAG)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        props.onDragOverRow(dropIndexFor(e, e.currentTarget, index));
+      }}
+      onDrop={(e) => {
+        e.stopPropagation();
+        props.onDropRow(e, dropIndexFor(e, e.currentTarget, index));
+      }}
+      onClick={props.onOpen}
+      onContextMenu={props.onMenu}
+    >
+      <PriorityIcon priority={task.priority} size={12} />
+      <span className="tk-row-id">{task.id}</span>
+      <span className="tk-row-title">{task.title || "Untitled"}</span>
+      <span className="sb-spacer" />
+      <AgentChip task={task} compact={!active} />
+      <span className="tk-row-actions">
+        {!active && task.status !== "done" && (
+          <button
+            className="sb-icon-btn tk-claude-btn"
+            title="Let Claude work on this"
+            onClick={(e) => {
+              e.stopPropagation();
+              void startAgent(root, task.id);
+            }}
+          >
+            <ClaudeMark size={12} />
+          </button>
+        )}
+      </span>
+    </div>
+  );
+}
+
+/** Compact "Tasks" section for the bottom of the Source Control sidebar. */
+export function TasksSection({ root }: { root: string }) {
+  const { state } = useBoard(root);
+  const KEY = "tcon.tasks.scmOpen";
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem(KEY) !== "0";
+    } catch {
+      return true;
+    }
+  });
+  const menu = useContextMenu();
+  const project = projectForRoot(root);
+  const openTasks = useMemo(() => {
+    if (!state) return [];
+    const out: Task[] = [];
+    const byId = new Map(state.tasks.map((t) => [t.id, t]));
+    for (const c of state.board.columns) {
+      if (c.id === "done") continue;
+      for (const id of state.columns[c.id] ?? []) {
+        const t = byId.get(id);
+        if (t) out.push(t);
+      }
+    }
+    // Agent activity first, then board order.
+    const rank = (t: Task) => (t.agent === "blocked" ? 0 : t.agent === "running" ? 1 : t.agent === "queued" ? 2 : 3);
+    return out.map((t, i) => [t, i] as const).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(([t]) => t);
+  }, [state]);
+
+  const toggle = () => {
+    setOpen((v) => {
+      try {
+        localStorage.setItem(KEY, v ? "0" : "1");
+      } catch {
+        /* ignore */
+      }
+      return !v;
+    });
+  };
+
+  return (
+    <div className={`sb-section tk-scm-section${open ? " sb-section-open" : ""}`}>
+      <div className="sb-section-header" onClick={toggle}>
+        <svg width="10" height="10" viewBox="0 0 10 10" className={`sb-chevron${open ? " sb-open" : ""}`}>
+          <path d="M3 1.5L7 5L3 8.5" fill="none" stroke="currentColor" strokeWidth="1.3" />
+        </svg>
+        <span className="sb-section-title">Tasks</span>
+        <span className="sb-count">{openTasks.length}</span>
+        <span className="sb-spacer" />
+        <span className="sb-section-actions" onClick={(e) => e.stopPropagation()}>
+          <button className="sb-icon-btn" title="Quick add task (Tasks view)" onClick={quickAddTask}>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M8 3v10M3 8h10" /></svg>
+          </button>
+          {project && (
+            <button className="sb-icon-btn" title="Open Board" onClick={() => openBoard(project.id)}>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+                <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" /><path d="M6 2.5v11M10.5 2.5v6" />
+              </svg>
+            </button>
+          )}
+        </span>
+      </div>
+      {open && (
+        <div className="sb-section-body tk-scm-body">
+          {openTasks.length === 0 && <div className="sb-empty">No open tasks.</div>}
+          {openTasks.map((t) => (
+            <div
+              key={t.id}
+              className="tk-row tk-row-scm"
+              title={`${t.id} · ${t.title}`}
+              onClick={() => project && openBoard(project.id, t.id)}
+              onContextMenu={(e) => menu.open(e, taskMenuItems(root, t, state, { open: () => project && openBoard(project.id, t.id) }))}
+            >
+              <StatusIcon status={t.status} size={12} />
+              <span className="tk-row-id">{t.id}</span>
+              <span className="tk-row-title">{t.title || "Untitled"}</span>
+              <span className="sb-spacer" />
+              <AgentChip task={t} compact />
+            </div>
+          ))}
+        </div>
+      )}
+      {menu.element}
+    </div>
+  );
+}

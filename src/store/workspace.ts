@@ -31,6 +31,7 @@ export interface OpenEditorOpts {
   preview?: boolean;
   diff?: { file: string | null; staged: boolean } | null;
   groupId?: string;
+  kind?: EditorTab["kind"];
 }
 
 export interface AddTerminalOpts {
@@ -545,7 +546,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
           return;
         }
       }
-      const tab: EditorTab = { id: uid(), path, preview, diff };
+      const tab: EditorTab = { id: uid(), path, preview, diff, ...(opts.kind ? { kind: opts.kind } : {}) };
       patchProject(projectId, (pr) => {
         let groups = pr.editorGroups;
         let sizes = pr.editorGroupSizes;

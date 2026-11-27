@@ -4,6 +4,7 @@ mod fs;
 mod git;
 pub mod osc;
 mod pty;
+mod tasks;
 mod themes;
 
 use db::{Db, Profile, RecentPath};
@@ -173,6 +174,14 @@ pub fn run() {
             fs::fs_create_project_dir,
             fs::fs_watch,
             fs::fs_unwatch,
+            tasks::tasks_load,
+            tasks::tasks_init,
+            tasks::task_create,
+            tasks::task_update,
+            tasks::task_move,
+            tasks::task_delete,
+            tasks::tasks_save_settings,
+            tasks::tasks_install_skill,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

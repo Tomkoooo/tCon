@@ -2,6 +2,7 @@ import type { Project } from "../../types";
 import { useWorkspace } from "../../store/workspace";
 import { useContextMenu } from "../ContextMenu";
 import { layoutMenuItems } from "./layoutMenu";
+import { useTasks } from "../../tasks/store";
 
 const FilesIcon = () => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
@@ -15,6 +16,11 @@ const GitIcon = () => (
     <path d="M6 7v10M18 10c0 4-6 3-11.2 7.5" />
   </svg>
 );
+const TasksIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16M15 4v9" /><path d="M5.5 8h1.5M11.5 8h1.5M11.5 11h1.5" strokeLinecap="round" />
+  </svg>
+);
 const LayoutIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
     <rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16M9 14h12" />
@@ -25,6 +31,9 @@ export function ActivityBar({ project }: { project: Project }) {
   const updateProject = useWorkspace((s) => s.updateProject);
   const changes = useWorkspace((s) => (s.gitStatus[project.id]?.isRepo ? s.gitStatus[project.id]!.files.length : 0));
   const menu = useContextMenu();
+  const taskRoot = project.rootPath.replace(/\/+$/, "");
+  const openTasks = useTasks((s) => s.boards[taskRoot]?.state?.tasks.filter((t) => t.status !== "done").length ?? 0);
+  const blockedTasks = useTasks((s) => s.boards[taskRoot]?.state?.tasks.filter((t) => t.agent === "blocked").length ?? 0);
 
   const toggle = (tab: Project["sidebarTab"]) =>
     updateProject(project.id, project.sidebarOpen && project.sidebarTab === tab ? { sidebarOpen: false } : { sidebarOpen: true, sidebarTab: tab });
@@ -38,6 +47,14 @@ export function ActivityBar({ project }: { project: Project }) {
       <button className={`ab-btn${on("git") ? " on" : ""}`} title="Source Control (⇧⌘G)" onClick={() => toggle("git")}>
         <GitIcon />
         {changes > 0 && <span className="ab-badge">{changes > 99 ? "99+" : changes}</span>}
+      </button>
+      <button className={`ab-btn${on("tasks") ? " on" : ""}`} title="Tasks" onClick={() => toggle("tasks")}>
+        <TasksIcon />
+        {openTasks > 0 && (
+          <span className="ab-badge" style={blockedTasks ? { background: "var(--warn)" } : undefined} title={blockedTasks ? `${blockedTasks} agent(s) need you` : undefined}>
+            {openTasks > 99 ? "99+" : openTasks}
+          </span>
+        )}
       </button>
       <span style={{ flex: 1 }} />
       <button className="ab-btn" title="Layout" onClick={(e) => menu.open(e, layoutMenuItems(project.id))}>
