@@ -261,13 +261,13 @@
 }
 .sb-graph-row:hover, .sb-graph-row.sb-hovered { background: var(--list-hover-bg, var(--bg-3)); }
 .sb-graph-svg { flex: none; overflow: visible; }
-.sb-graph-summary { flex: 1 1 auto; min-width: 48px; overflow: hidden; text-overflow: ellipsis; font-weight: 400; }
+.sb-graph-summary { flex: 0 1 auto; min-width: 48px; overflow: hidden; text-overflow: ellipsis; font-weight: 400; }
 .sb-graph-head .sb-graph-summary { font-weight: 600; color: var(--fg); }
 .sb-graph-row.sb-flash { animation: sb-flash 1.2s ease-out; }
 @keyframes sb-flash { from { background: color-mix(in srgb, var(--accent) 30%, transparent); } to { background: transparent; } }
 
 /* ref badges: tinted with the lane colour (--lane) */
-.sb-refs { flex: 0 1 auto; display: inline-flex; align-items: center; gap: 3px; max-width: 45%; min-width: 0; overflow: hidden; }
+.sb-refs { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 3px; max-width: 60%; min-width: 0; overflow: hidden; }
 .sb-ref {
   flex: 0 1 auto; display: inline-flex; align-items: center; gap: 3px; min-width: 0; max-width: 130px; height: 16px; padding: 0 6px 0 4px;
   border-radius: 8px; border: 1px solid color-mix(in srgb, var(--lane) 55%, transparent);
