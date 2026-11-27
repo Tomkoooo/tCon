@@ -87,6 +87,8 @@ tCon keeps running in the menu bar after you close the window. **⌥⇧Space** o
 from any app: pick a project, type a task, press Enter. `#label` and `!high` are parsed from the
 title. Optionally launch at login so the shortcut always works.
 
+<img src="docs/screenshots/quick-add.gif" alt="Typing a task into the quick panel and seeing it appear in the Inbox column" width="640">
+
 ### Git
 
 <img src="docs/screenshots/git-graph.png" alt="Source control panel with a commit graph and a commit hover card" width="900">
