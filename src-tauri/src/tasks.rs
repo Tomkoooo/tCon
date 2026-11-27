@@ -45,6 +45,8 @@ pub struct Task {
     pub depends: Vec<String>,
     /// Git worktree the agent works in (isolation: worktree), "" = the main checkout.
     pub worktree: String,
+    /// Claude session id of the agent (resume after a restart / usage limit).
+    pub session: String,
     /// Frontmatter keys we don't know, kept verbatim (key, raw value).
     pub extra: Vec<(String, String)>,
     /// Body text before the agent sections.
@@ -86,6 +88,8 @@ pub struct BoardSettings {
     pub worktree_setup: String,
     /// Symlink the main checkout's node_modules into new worktrees.
     pub link_node_modules: bool,
+    /// Interrupted agents (app closed, machine restarted): "auto" resume | "ask".
+    pub resume_interrupted: String,
     /// Share `.tcon/` via git (no `.git/info/exclude` entry).
     pub shared: bool,
 }
@@ -104,6 +108,7 @@ impl Default for BoardSettings {
             isolation: "none".into(),
             worktree_setup: String::new(),
             link_node_modules: true,
+            resume_interrupted: "ask".into(),
             shared: false,
         }
     }
@@ -122,6 +127,7 @@ impl BoardSettings {
         self.pickup_position = pick(&self.pickup_position, &["end", "front", "priority"]);
         self.run_mode = pick(&self.run_mode, &["rolling", "batch", "parallel-safe"]);
         self.isolation = pick(&self.isolation, &["none", "worktree"]);
+        self.resume_interrupted = pick(&self.resume_interrupted, &["ask", "auto"]);
         self.max_agents = self.max_agents.clamp(1, 16);
         self.batch_size = self.batch_size.clamp(1, 16);
         self
@@ -185,6 +191,7 @@ pub struct TaskPatch {
     pub pane_id: Option<String>,
     pub depends: Option<Vec<String>>,
     pub worktree: Option<String>,
+    pub session: Option<String>,
     pub description: Option<String>,
     /// Line appended to `## Progress log`.
     pub log: Option<String>,
@@ -433,6 +440,7 @@ pub fn parse_task(text: &str, fallback_id: &str) -> Task {
                     "pane" | "paneId" => t.pane_id = unquote(&raw),
                     "depends" | "dependsOn" => t.depends = parse_list(&raw),
                     "worktree" => t.worktree = unquote(&raw),
+                    "session" => t.session = unquote(&raw),
                     _ => t.extra.push((key, raw)),
                 }
             }
@@ -486,6 +494,9 @@ pub fn serialize_task(t: &Task) -> String {
     }
     if !t.worktree.is_empty() {
         kv(&mut s, "worktree", &quote(&t.worktree));
+    }
+    if !t.session.is_empty() {
+        kv(&mut s, "session", &quote(&t.session));
     }
     for (k, v) in &t.extra {
         kv(&mut s, k, v);
@@ -785,6 +796,9 @@ fn update_locked(root: &str, id: &str, patch: TaskPatch) -> Result<Task, String>
     if let Some(v) = patch.pane_id {
         t.pane_id = v;
     }
+    if let Some(v) = patch.session {
+        t.session = v;
+    }
     if let Some(v) = patch.worktree {
         t.worktree = v;
     }
@@ -1077,6 +1091,7 @@ mod tests {
             pane_id: "p1".into(),
             depends: vec!["T-1".into()],
             worktree: "/Users/x/.tcon/worktrees/p-1/T-3".into(),
+            session: "0f8fad5b-d9cb-469f-a165-70867728950e".into(),
             extra: vec![("estimate".into(), "3".into())],
             description: "Users report a loop.\n\n## Notes from the meeting\n- happens on Safari".into(),
             sections: "## Plan\n1. look\n\n## Progress log\n- 2026-11-27 10:00 — Created\n\n## Verification".into(),

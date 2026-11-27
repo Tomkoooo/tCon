@@ -70,7 +70,7 @@ export interface AgentEntry {
   detail: string;
 }
 
-const ACTIVE = new Set(["working", "blocked", "waiting", "planning", "queued", "failed", "detached"]);
+const ACTIVE = new Set(["working", "blocked", "waiting", "planning", "queued", "interrupted", "limited", "failed", "detached"]);
 
 /** Every task with agent activity on every loaded board. Not a hook: call inside a selector. */
 export function collectAgents(): AgentEntry[] {
@@ -99,18 +99,19 @@ export function collectAgents(): AgentEntry[] {
       });
     }
   }
-  const rank: Record<string, number> = { blocked: 0, failed: 1, working: 2, planning: 3, waiting: 4, detached: 5, queued: 6 };
+  const rank: Record<string, number> = { blocked: 0, limited: 1, failed: 2, interrupted: 3, working: 4, planning: 5, waiting: 6, detached: 7, queued: 8 };
   return out.sort((a, b) => (rank[a.view.kind] ?? 9) - (rank[b.view.kind] ?? 9) || a.task.id.localeCompare(b.task.id, undefined, { numeric: true }));
 }
 
 export function summarize(list: AgentEntry[]) {
-  const c = { running: 0, needsYou: 0, queued: 0, planning: 0, failed: 0 };
+  const c = { running: 0, needsYou: 0, queued: 0, planning: 0, failed: 0, paused: 0 };
   for (const e of list) {
     if (e.view.kind === "working" || e.view.kind === "waiting") c.running++;
     else if (e.view.kind === "blocked") c.needsYou++;
     else if (e.view.kind === "queued") c.queued++;
     else if (e.view.kind === "planning") c.planning++;
     else if (e.view.kind === "failed") c.failed++;
+    else if (e.view.kind === "interrupted" || e.view.kind === "limited") c.paused++;
   }
   return c;
 }

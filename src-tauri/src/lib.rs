@@ -7,6 +7,7 @@ mod clipboard;
 mod db;
 mod fs;
 mod git;
+mod limits;
 pub mod osc;
 mod pty;
 mod security;

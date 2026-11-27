@@ -126,6 +126,16 @@ export function RunQueuePanel({ root, state, onClose }: { root: string; state: B
             </Select>
           </>
         )}
+        <span className="tkq-label" title="When an agent's session was cut off (tCon closed, the Mac restarted)">Interrupted agents</span>
+        <Segmented<BoardSettings["resumeInterrupted"]>
+          ariaLabel="Interrupted agents"
+          value={s.resumeInterrupted}
+          onChange={(v) => save({ resumeInterrupted: v })}
+          options={[
+            { value: "ask", label: "Ask to resume" },
+            { value: "auto", label: "Resume automatically" },
+          ]}
+        />
         <span className="tkq-label" title="Each agent works on its own branch (tcon/T-n) in a separate git worktree">Isolation</span>
         <Segmented<BoardSettings["isolation"]>
           ariaLabel="Isolation"

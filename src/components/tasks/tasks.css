@@ -28,6 +28,7 @@
 .tk-agent-done { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
 .tk-agent-failed { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
 .tk-agent-queued, .tk-agent-detached { color: var(--fg-dim); }
+.tk-agent-interrupted, .tk-agent-limited { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); }
 .tk-agent-planning { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .tk-agent-compact.tk-agent-working, .tk-agent-compact.tk-agent-blocked, .tk-agent-compact.tk-agent-done,
 .tk-agent-compact.tk-agent-failed, .tk-agent-compact.tk-agent-waiting, .tk-agent-compact.tk-agent-planning { background: transparent; }

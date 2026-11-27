@@ -24,7 +24,7 @@ priority: high          # none | low | medium | high | urgent
 labels: [bug, auth]
 created: 2026-11-27T10:00:00Z
 updated: 2026-11-27T10:00:00Z
-agent: idle             # idle | queued | planning | running | blocked | done | failed
+agent: idle             # idle | queued | planning | running | blocked | interrupted | limited | done | failed
 branch:
 commits: []
 pane:                   # tCon terminal pane id (managed by tCon, leave as is)
@@ -52,7 +52,7 @@ Rules for editing:
 
 1. List `.tcon/tasks/*.md` and read their frontmatter.
 2. Open tasks are those with `status` other than `done`. `todo` tasks are ready to work on, `inbox` tasks are untriaged notes (ask before working on them).
-3. Prefer higher `priority`, then the oldest `created`. Skip tasks whose `agent` is `running`, `planning` or `queued` (another session owns them).
+3. Prefer higher `priority`, then the oldest `created`. Skip tasks whose `agent` is `running`, `planning`, `queued`, `interrupted` or `limited` (another session owns them; tCon resumes interrupted and limited agents itself).
 4. When the user asks what to do next, show a short list (id, title, status, priority) and ask which one to take.
 
 ## Working a task

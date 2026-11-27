@@ -13,6 +13,9 @@ import { onBoardLoaded, taskById, useTasks } from "./store";
 import type { AgentMode, BoardState, Task } from "./types";
 import { insertIntoQueue, planMeta, previewGroups, schedule, type SchedInput, type SchedTask } from "./scheduler";
 import { notifyTask } from "../notify";
+import { listen } from "@tauri-apps/api/event";
+import { isSessionId, sessionsApi } from "../claudeSessions";
+import { accountEnv } from "../store/accounts";
 
 const trim = (p: string) => (p.length > 1 ? p.replace(/\/+$/, "") : p);
 const shq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
@@ -30,7 +33,7 @@ export function livePane(task: Task): string | null {
   return found && !found[1].exited ? task.paneId : null;
 }
 
-export type AgentViewKind = "none" | "queued" | "planning" | "working" | "waiting" | "blocked" | "done" | "failed" | "detached";
+export type AgentViewKind = "none" | "queued" | "planning" | "working" | "waiting" | "blocked" | "interrupted" | "limited" | "done" | "failed" | "detached";
 export interface AgentView { kind: AgentViewKind; label: string; title: string }
 
 /** What to show for a task's agent: the file's `agent:` state refined by the live pane status. */
@@ -40,6 +43,8 @@ export function agentView(task: Task, pane: PaneStatus | undefined, alive: boole
   if (a === "blocked") return { kind: "blocked", label: "Blocked", title: "The agent is blocked and asked a question (see the progress log)" };
   if (a === "failed" || (alive && pane?.state === "error" && a === "running")) return { kind: "failed", label: "Failed", title: "The agent failed — see the progress log" };
   if (a === "queued") return { kind: "queued", label: "Queued", title: "Waiting for a free agent slot" };
+  if (a === "interrupted") return { kind: "interrupted", label: "Interrupted", title: "The agent's session ended unexpectedly (app closed, restart, crash); it can resume where it left off" };
+  if (a === "limited") return { kind: "limited", label: "Usage limit", title: "Paused by a Claude usage limit; resumes after the reset or when you switch accounts" };
   if (a === "planning") {
     if (task.paneId && !alive) return { kind: "detached", label: "Planner ended", title: "The planning agent's terminal is gone" };
     return { kind: "planning", label: "Planning", title: "Claude is planning this task (no code changes)" };
@@ -179,7 +184,10 @@ async function launchInner(root: string, task: Task, mode: AgentMode = "work"): 
     prep.push(`{ [ -d ${shq(nm)} ] && [ ! -e node_modules ] && ln -s ${shq(nm)} node_modules; true; }`);
   }
   if (wt && settings?.worktreeSetup.trim()) prep.push(`{ ${settings.worktreeSetup.trim()} ; }`);
-  const cmd = `${prep.join(" && ")} && claude${modelFlag} ${shq(buildPrompt(task, project.rootPath, mode, wt))}`;
+  // A known session id lets tCon resume this exact conversation later (restart, usage limit).
+  const session = mode === "work" ? crypto.randomUUID() : "";
+  const sessionFlag = session ? ` --session-id ${session}` : "";
+  const cmd = `${prep.join(" && ")} && claude${modelFlag}${sessionFlag} ${shq(buildPrompt(task, project.rootPath, mode, wt))}`;
   const paneId = ws.addTerminal(project.id, {
     claude: true,
     command: cmd,
@@ -194,7 +202,8 @@ async function launchInner(root: string, task: Task, mode: AgentMode = "work"): 
   }
   const status = task.status === "inbox" || task.status === "todo" ? "in-progress" : undefined;
   const wtPatch = wt ? { worktree: wt.path, branch: wt.branch } : {};
-  await useTasks.getState().update(root, task.id, { agent: "running", paneId, status, ...wtPatch, log: wt ? `Claude agent started in tCon (worktree ${wt.branch})` : "Claude agent started in tCon" });
+  retries.delete(keyOf(root, task.id));
+  await useTasks.getState().update(root, task.id, { agent: "running", paneId, status, session, ...wtPatch, log: wt ? `Claude agent started in tCon (worktree ${wt.branch})` : "Claude agent started in tCon" });
   return true;
 }
 
@@ -257,6 +266,10 @@ export async function startAgent(root: string, id: string): Promise<void> {
   if (!state || !task) return;
   if (livePane(task) && (task.agent === "running" || task.agent === "blocked" || task.agent === "planning")) {
     openAgentTerminal(root, id);
+    return;
+  }
+  if ((task.agent === "interrupted" || task.agent === "limited") && isSessionId(task.session)) {
+    await resumeAgent(root, id, "Resumed by user");
     return;
   }
   if (busyCount(state) >= Math.max(1, state.board.settings.maxAgents || 1)) {
@@ -423,7 +436,44 @@ export async function pumpQueue(root: string): Promise<void> {
   }
 }
 
-/** Mark agents whose tCon pane is gone (closed, exited, app restarted) as no longer running. */
+// ---------------- interrupted / limited agents ----------------
+
+/** root::id → automatic resume attempts after an error exit. */
+const retries = new Map<string, number>();
+const MAX_RETRIES = 3;
+
+/** Continue an agent's own Claude session in a new pane (`claude --resume <session>`). */
+export async function resumeAgent(root: string, id: string, why = "Resumed"): Promise<boolean> {
+  root = trim(root);
+  const key = keyOf(root, id);
+  if (busyKeys.has(key)) return false;
+  const task = taskById(root, id);
+  const project = projectForRoot(root);
+  if (!task || !project) return false;
+  if (!isSessionId(task.session)) {
+    await useTasks.getState().update(root, id, { agent: "idle", paneId: "", log: `${why} — no session to resume, start it again` });
+    return false;
+  }
+  if (livePane(task)) return false;
+  busyKeys.add(key);
+  try {
+    const model = projectModel(project);
+    const modelFlag = model === "default" ? "" : ` --model ${shq(model)}`;
+    const cwd = task.worktree || project.rootPath;
+    const prompt = oneLine(`Continue tCon task ${id} where you left off: check the ## Progress log in
+      ${trim(project.rootPath)}/.tcon/tasks/${id}.md and the git state, then carry on with the protocol.`);
+    const cmd = `cd ${shq(cwd)} && claude${modelFlag} --resume ${task.session} ${shq(prompt)}`;
+    const paneId = useWorkspace.getState().addTerminal(project.id, { claude: true, command: cmd, title: `${id} · ${oneLine(task.title)}`.slice(0, 60), ephemeral: true });
+    if (!paneId) return false;
+    await useTasks.getState().update(root, id, { agent: "running", paneId, log: `${why} — Claude session resumed` });
+    return true;
+  } finally {
+    busyKeys.delete(key);
+  }
+}
+
+/** Mark agents whose tCon pane is gone (closed, exited, app restarted). Agents with a session
+ *  become `interrupted` (resumable); an error exit is retried with backoff. */
 async function reapDeadAgents(root: string) {
   if (!useWorkspace.getState().loaded) return;
   const state = useTasks.getState().boards[root]?.state;
@@ -436,13 +486,121 @@ async function reapDeadAgents(root: string) {
     busyKeys.add(key);
     changed = true;
     try {
-      const msg = t.agent === "planning" ? "Planner terminal closed before the plan was finished" : "Agent terminal closed — session ended";
-      await useTasks.getState().update(root, t.id, { agent: "idle", paneId: "", log: msg });
+      if (t.agent === "planning") {
+        await useTasks.getState().update(root, t.id, { agent: "idle", paneId: "", log: "Planner terminal closed before the plan was finished" });
+        continue;
+      }
+      if (!isSessionId(t.session)) {
+        await useTasks.getState().update(root, t.id, { agent: "idle", paneId: "", log: "Agent terminal closed — session ended" });
+        continue;
+      }
+      const found = findPane(useWorkspace.getState(), t.paneId);
+      const errored = !!found && found[1].exited && (found[1].exitCode ?? 0) !== 0;
+      const n = retries.get(key) ?? 0;
+      if (errored && n < MAX_RETRIES) {
+        retries.set(key, n + 1);
+        const delay = 5000 * 4 ** n;
+        await useTasks.getState().update(root, t.id, { agent: "interrupted", log: `Claude exited with an error — retrying in ${Math.round(delay / 1000)} s (${n + 1}/${MAX_RETRIES})` });
+        window.setTimeout(() => {
+          const cur = taskById(root, t.id);
+          if (cur?.agent === "interrupted") void resumeAgent(root, t.id, `Retry ${n + 1}`);
+        }, delay);
+      } else if (errored) {
+        retries.delete(key);
+        await useTasks.getState().update(root, t.id, { agent: "failed", paneId: "", log: `Claude kept exiting with an error (${MAX_RETRIES} retries) — giving up` });
+        void notifyTask(`${projectForRoot(root)?.name ?? root} · ${t.id} failed`, "Claude kept exiting with an error.");
+      } else {
+        await useTasks.getState().update(root, t.id, { agent: "interrupted", paneId: "", log: "Interrupted — the agent's terminal is gone; its session can be resumed" });
+      }
     } finally {
       busyKeys.delete(key);
     }
   }
   if (changed) void pumpQueue(root);
+}
+
+/** Interrupted agents found on a board: resume them, or ask (once per app run). */
+const askedResume = new Set<string>();
+function offerResume(root: string, state: BoardState) {
+  for (const t of state.tasks) {
+    if (t.agent !== "interrupted" || livePane(t)) continue;
+    const key = keyOf(root, t.id);
+    if (askedResume.has(key) || retries.has(key)) continue;
+    askedResume.add(key);
+    if (state.board.settings.resumeInterrupted === "auto") void resumeAgent(root, t.id, "Resumed after an interruption");
+    else useTasks.getState().pushPrompt({ root, taskId: t.id, title: t.title, kind: "resume" });
+  }
+}
+
+/** Boards tCon paused because of a usage limit (resumed with the agents). */
+const limitPaused = new Set<string>();
+const limitTimers = new Map<string, number>();
+
+async function onLimit(paneId: string, message: string, resetAt: number | null) {
+  for (const root of Object.keys(useTasks.getState().boards)) {
+    const st = useTasks.getState().boards[root]?.state;
+    const t = st?.tasks.find((x) => x.paneId === paneId && (x.agent === "running" || x.agent === "blocked"));
+    if (!st || !t) continue;
+    const when = resetAt ? new Date(resetAt * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
+    await useTasks.getState().update(root, t.id, { agent: "limited", log: `Paused — usage limit${when ? `, resets ${when}` : ""}` });
+    if (!st.board.settings.paused) {
+      limitPaused.add(root);
+      await useTasks.getState().saveSettings(root, { paused: true });
+    }
+    const name = projectForRoot(root)?.name ?? root;
+    void notifyTask(`${name} · usage limit`, `${t.id} paused${when ? ` until ${when}` : ""}. Switch accounts to continue now.`);
+    if (resetAt) {
+      window.clearTimeout(limitTimers.get(root));
+      const ms = Math.max(30_000, resetAt * 1000 - Date.now() + 60_000);
+      limitTimers.set(root, window.setTimeout(() => void resumeLimited(root, "Usage limit reset"), ms));
+    }
+    return;
+  }
+  // Not a task agent: tell the user about the session.
+  const found = findPane(useWorkspace.getState(), paneId);
+  if (found) void notifyTask(`${found[0].name} · Claude usage limit`, message);
+}
+
+/** Continue agents paused by a usage limit (after the reset, or on another account). */
+export async function resumeLimited(root: string, why: string): Promise<void> {
+  root = trim(root);
+  limitTimers.delete(root);
+  const st = useTasks.getState().boards[root]?.state;
+  for (const t of st?.tasks ?? []) {
+    if (t.agent !== "limited") continue;
+    const pane = livePane(t);
+    if (pane) {
+      void api.ptyWrite(pane, `Continue where you left off on task ${t.id}.\r`).catch(() => {});
+      await useTasks.getState().update(root, t.id, { agent: "running", log: `${why} — continuing` });
+    } else {
+      await resumeAgent(root, t.id, why);
+    }
+  }
+  if (limitPaused.delete(root)) await resumeQueue(root);
+}
+
+/** Account switched: move limited / interrupted agents to the new account and continue. */
+async function onAccountSwitch(prevConfig: string | null) {
+  const newConfig = accountEnv().CLAUDE_CONFIG_DIR ?? null;
+  for (const root of Object.keys(useTasks.getState().boards)) {
+    const st = useTasks.getState().boards[root]?.state;
+    const project = projectForRoot(root);
+    if (!st || !project) continue;
+    let moved = false;
+    for (const t of st.tasks) {
+      if ((t.agent !== "limited" && t.agent !== "interrupted") || !isSessionId(t.session)) continue;
+      await sessionsApi.copy(prevConfig, newConfig, t.worktree || project.rootPath, t.session).catch(() => false);
+      const pane = livePane(t);
+      if (pane) {
+        const ws = useWorkspace.getState();
+        if (Object.keys(project.panes).length > 1) ws.closePane(project.id, pane);
+      }
+      await useTasks.getState().update(root, t.id, { paneId: "" });
+      await resumeAgent(root, t.id, "Switched account");
+      moved = true;
+    }
+    if (moved && limitPaused.delete(root)) await resumeQueue(root);
+  }
 }
 
 async function skillDirs(): Promise<string[]> {
@@ -527,7 +685,11 @@ export function installAgentRuntime(): () => void {
       const t = next.tasks.find((x) => x.id === p.taskId);
       if (!t || t.status !== "todo" || (t.agent !== "idle" && t.agent !== "")) useTasks.getState().dismissPrompt(p.key);
     }
-    void reapDeadAgents(root).then(() => pumpQueue(root));
+    void reapDeadAgents(root).then(() => {
+      const st = useTasks.getState().boards[root]?.state;
+      if (st) offerResume(root, st);
+      return pumpQueue(root);
+    });
   });
 
   // Panes closing / exiting frees agent slots.
@@ -540,10 +702,23 @@ export function installAgentRuntime(): () => void {
     }, 800);
   });
 
+  const offLimit = listen<{ paneId: string; hit: { message: string; resetAt: number | null } }>("pane-limit", ({ payload }) =>
+    void onLimit(payload.paneId, payload.hit.message, payload.hit.resetAt),
+  );
+  let lastConfig = accountEnv().CLAUDE_CONFIG_DIR ?? null;
+  const offAcct = useAccounts.subscribe((s, prev) => {
+    if (s.activeId === prev.activeId) return;
+    const was = lastConfig;
+    lastConfig = accountEnv().CLAUDE_CONFIG_DIR ?? null;
+    void onAccountSwitch(was);
+  });
+
   return () => {
     runtimeInstalled = false;
     offLoad();
     offWs();
+    offAcct();
+    void offLimit.then((f) => f());
     window.clearTimeout(timer);
   };
 }

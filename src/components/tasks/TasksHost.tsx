@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useWorkspace } from "../../store/workspace";
 import { installTaskWatchers, useTasks } from "../../tasks/store";
-import { installAgentRuntime, startAgent } from "../../tasks/agent";
+import { installAgentRuntime, resumeAgent, startAgent } from "../../tasks/agent";
 import { hasBackend } from "../../tasks/api";
 import { ClaudeMark } from "./parts";
 import "./tasks.css";
@@ -40,7 +40,7 @@ export function TasksHost() {
           <div key={p.key} className="tk-toast">
             <ClaudeMark size={14} />
             <div className="tk-toast-body">
-              <div className="tk-toast-title">Start Claude on {p.taskId}?</div>
+              <div className="tk-toast-title">{p.kind === "resume" ? `Resume the interrupted agent on ${p.taskId}?` : `Start Claude on ${p.taskId}?`}</div>
               <div className="tk-toast-sub" title={p.title}>
                 {p.title}
                 {multi && project ? <span className="tk-toast-proj"> · {project.name}</span> : null}
@@ -51,10 +51,10 @@ export function TasksHost() {
                 className="btn small primary"
                 onClick={() => {
                   useTasks.getState().dismissPrompt(p.key);
-                  void startAgent(p.root, p.taskId);
+                  void (p.kind === "resume" ? resumeAgent(p.root, p.taskId, "Resumed after an interruption") : startAgent(p.root, p.taskId));
                 }}
               >
-                Start
+                {p.kind === "resume" ? "Resume" : "Start"}
               </button>
               <button className="btn small ghost" onClick={() => useTasks.getState().dismissPrompt(p.key)}>Not now</button>
             </div>

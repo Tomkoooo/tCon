@@ -1,6 +1,6 @@
 // Task board types. Mirror src-tauri/src/tasks.rs (camelCase serde).
 
-export type AgentState = "idle" | "queued" | "planning" | "running" | "blocked" | "done" | "failed";
+export type AgentState = "idle" | "queued" | "planning" | "running" | "blocked" | "interrupted" | "limited" | "done" | "failed";
 export type AgentMode = "work" | "plan";
 export type Priority = "none" | "low" | "medium" | "high" | "urgent";
 
@@ -22,6 +22,8 @@ export interface Task {
   depends: string[];
   /** git worktree the agent works in ("" = main checkout) */
   worktree: string;
+  /** Claude session id of the agent (resume) */
+  session: string;
   extra: [string, string][];
   /** body before the agent sections */
   description: string;
@@ -50,6 +52,8 @@ export interface BoardSettings {
   isolation: "none" | "worktree";
   worktreeSetup: string;
   linkNodeModules: boolean;
+  /** interrupted agents (app closed, restart): resume automatically or ask */
+  resumeInterrupted: "ask" | "auto";
   shared: boolean;
 }
 
@@ -64,6 +68,7 @@ export const DEFAULT_SETTINGS: BoardSettings = {
   isolation: "none",
   worktreeSetup: "",
   linkNodeModules: true,
+  resumeInterrupted: "ask",
   shared: false,
 };
 
@@ -98,6 +103,7 @@ export interface TaskPatch {
   paneId?: string;
   depends?: string[];
   worktree?: string;
+  session?: string;
   description?: string;
   /** line appended to "## Progress log" */
   log?: string;

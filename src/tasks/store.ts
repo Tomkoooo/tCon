@@ -22,6 +22,8 @@ export interface AgentPrompt {
   root: string;
   taskId: string;
   title: string;
+  /** "start" (new Todo task, default) or "resume" (interrupted agent) */
+  kind?: "start" | "resume";
 }
 
 interface TasksState {

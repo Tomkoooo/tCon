@@ -102,6 +102,7 @@ export function AgentStatusItem() {
     c.planning && `${c.planning} planning`,
     c.needsYou && `${c.needsYou} need${c.needsYou === 1 ? "s" : ""} you`,
     c.queued && `${c.queued} queued`,
+    c.paused && `${c.paused} interrupted`,
     c.failed && `${c.failed} failed`,
   ].filter(Boolean);
   const groups = new Map<string, AgentEntry[]>();

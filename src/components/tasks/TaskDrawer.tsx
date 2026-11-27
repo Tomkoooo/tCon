@@ -259,7 +259,7 @@ export function TaskDrawer({ root, task, state, onClose }: { root: string; task:
             ) : (
               <button className="btn small" disabled={!project} title={project ? undefined : "Open this folder as a project first"} onClick={() => void startAgent(root, task.id)}>
                 <ClaudeMark size={12} />
-                {task.agent === "done" || task.agent === "failed" ? "Run Claude again" : "Start Claude"}
+                {task.agent === "interrupted" || task.agent === "limited" ? "Resume agent" : task.agent === "done" || task.agent === "failed" ? "Run Claude again" : "Start Claude"}
               </button>
             )}
             {!running && !queued && task.status !== "done" && (
