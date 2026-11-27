@@ -252,8 +252,9 @@ export function BoardView({ project }: { project: Project }) {
                         focusBoard();
                       }}
                       onAdd={async (title, keepOpen) => {
-                        const t = await useTasks.getState().create(root, title, "", col.id);
-                        if (t) setSelected(t.id);
+                        const t = await useTasks.getState().capture(root, title, "", col.id);
+                        // Adding another: keep the input in view instead of scrolling to the new card.
+                        if (t && !keepOpen) setSelected(t.id);
                         if (!keepOpen) {
                           setAdding(null);
                           focusBoard();
@@ -393,12 +394,18 @@ function Card(props: {
 
 function InlineAdd({ onAdd, onCancel }: { onAdd(title: string, keepOpen: boolean): Promise<void>; onCancel(): void }) {
   const [v, setV] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+  const [added, setAdded] = useState(0);
+  // Keep the input visible while adding several cards in a row.
+  useEffect(() => {
+    ref.current?.scrollIntoView({ block: "nearest" });
+  }, [added]);
   return (
-    <div className="tkb-card tkb-inline-add">
+    <div className="tkb-card tkb-inline-add" ref={ref}>
       <textarea
         autoFocus
         rows={2}
-        placeholder="Task title (↵ add, ⇧↵ add another)"
+        placeholder="Task title (#label !high · ↵ add, ⇧↵ add another)"
         value={v}
         onChange={(e) => setV(e.target.value)}
         onBlur={() => !v.trim() && onCancel()}
@@ -408,7 +415,7 @@ function InlineAdd({ onAdd, onCancel }: { onAdd(title: string, keepOpen: boolean
             const t = v.trim();
             if (!t) return onCancel();
             setV("");
-            void onAdd(t, e.shiftKey);
+            void onAdd(t, e.shiftKey).then(() => setAdded((n) => n + 1));
           } else if (e.key === "Escape") {
             e.preventDefault();
             e.stopPropagation();
