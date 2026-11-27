@@ -56,7 +56,6 @@ interface WorkspaceState {
   profiles: Profile[];
   modal: Modal;
   showInactive: boolean;
-  theme: "system" | "dark" | "light";
   defaultPanelPosition: PanelPosition;
 
   // projects
@@ -110,7 +109,6 @@ interface WorkspaceState {
   // misc
   setModal(m: Modal): void;
   setShowInactive(v: boolean): void;
-  setTheme(t: "system" | "dark" | "light"): void;
   loadProfiles(): Promise<void>;
   restore(): Promise<void>;
 }
@@ -280,7 +278,6 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     profiles: [],
     modal: null,
     showInactive: false,
-    theme: "system",
     defaultPanelPosition: "bottom",
 
     openProject({ path, name, color, profileId, claude }) {
@@ -782,10 +779,6 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     setShowInactive(showInactive) {
       set({ showInactive });
     },
-    setTheme(theme) {
-      set({ theme });
-      api.settingSet("theme", theme).catch(() => {});
-    },
 
     async loadProfiles() {
       try {
@@ -799,8 +792,6 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       await get().loadProfiles();
       await useAccounts.getState().load(); // the active account's env applies to restored panes
       try {
-        const theme = await api.settingGet("theme");
-        if (theme === "dark" || theme === "light" || theme === "system") set({ theme });
         const pos = await api.settingGet("panelPosition");
         if (pos === "bottom" || pos === "top" || pos === "left" || pos === "right") set({ defaultPanelPosition: pos });
         const raw = await api.settingGet("workspace");

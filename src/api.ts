@@ -50,6 +50,15 @@ export const api = {
   claudeAuthLogout: (configDir: string | null) => invoke<void>("claude_auth_logout", { configDir }),
   accountPrepareDir: (dir: string) => invoke<void>("account_prepare_dir", { dir }),
 
+  // Theming / config (~/.tcon)
+  themesScan: () => invoke<import("./theming/types").ThemeCatalog>("themes_scan"),
+  themeLoad: (path: string) => invoke<import("./theming/types").ColorThemeData>("theme_load", { path }),
+  iconThemeLoad: (path: string) => invoke<unknown>("icon_theme_load", { path }),
+  themeAsset: (path: string) => invoke<string>("theme_asset", { path }),
+  configInit: () => invoke<string>("config_init"),
+  configRead: (name: string) => invoke<string>("config_read", { name }),
+  configWrite: (name: string, content: string) => invoke<void>("config_write", { name, content }),
+
   // FS
   fsListDir: (path: string, showHidden = false) => invoke<FsEntry[]>("fs_list_dir", { path, showHidden }),
   fsReadText: (path: string) => invoke<FileContent>("fs_read_text", { path }),

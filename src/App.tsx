@@ -3,9 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import { findPane, isPaneVisible, useWorkspace } from "./store/workspace";
-import { closeEditors } from "./components/editor/editorActions";
 import { scheduleGitRefresh } from "./store/gitRefresh";
-import { terminals } from "./terminal/registry";
 import type { FsChangedEvent, ProgramStatus } from "./types";
 import { TabBar } from "./components/TabBar";
 import { ProjectView } from "./components/ProjectView";
@@ -13,6 +11,8 @@ import { NewProjectModal } from "./components/NewProjectModal";
 import { ProfilesModal } from "./components/ProfilesModal";
 import { ProjectSettingsModal } from "./components/ProjectSettingsModal";
 import { StatusBar } from "./components/StatusBar";
+import { useTheming } from "./theming/store";
+import { COMMAND_MAP, effectiveBindings, resolveKey } from "./commands";
 
 // ---------- backend events ----------
 function useBackendEvents() {
@@ -85,99 +85,22 @@ function useDockBadge() {
 }
 
 // ---------- theme ----------
-function useTheme() {
-  const theme = useWorkspace((s) => s.theme);
-  useEffect(() => {
-    if (theme === "system") delete document.documentElement.dataset.theme;
-    else document.documentElement.dataset.theme = theme;
-    requestAnimationFrame(() => terminals.applyTheme());
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = () => terminals.applyTheme();
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, [theme]);
-}
-
-// ---------- keyboard shortcuts ----------
-export function jumpToAttention() {
-  const st = useWorkspace.getState();
-  const candidates: [string, string, number][] = [];
-  for (const id of st.order) {
-    const p = st.projects[id];
-    for (const paneId of Object.keys(p.panes)) {
-      const s = st.statuses[paneId];
-      if (s && (s.state === "blocked" || (s.state === "done" && !s.seen) || (s.state === "error" && !s.seen)))
-        candidates.push([id, paneId, s.state === "blocked" ? 0 : 1]);
-    }
-  }
-  candidates.sort((a, b) => a[2] - b[2]);
-  const target = candidates[0];
-  if (!target) return;
-  st.setActive(target[0]);
-  st.focusPane(target[0], target[1]);
-  requestAnimationFrame(() => terminals.focus(target[1]));
-}
-
+// ---------- keyboard shortcuts (keybindings.json + defaults, see commands.ts) ----------
 function useShortcuts() {
+  const userBindings = useTheming((s) => s.keybindings);
   useEffect(() => {
+    const bindings = effectiveBindings(userBindings);
     const onKey = (e: KeyboardEvent) => {
-      const st = useWorkspace.getState();
-      const project = st.activeProjectId ? st.projects[st.activeProjectId] : null;
-      const k = e.key.toLowerCase();
-      const run = (fn: () => void) => {
-        e.preventDefault();
-        e.stopPropagation();
-        fn();
-      };
-      // Ctrl combos (VS Code style)
-      if (e.ctrlKey && !e.metaKey && !e.altKey) {
-        if (e.key === "Tab") return run(() => st.cycleTab(e.shiftKey ? -1 : 1));
-        if (project && (e.code === "Backquote" || e.key === "`")) {
-          return run(() => (e.shiftKey ? st.addTerminal(project.id, { claude: false }) : st.togglePanel(project.id)));
-        }
-        return;
-      }
-      if (!e.metaKey || e.ctrlKey) return;
-      const inEditor = !!project && project.focusArea === "editor" && project.editorGroups.length > 0;
-      if (k === "t" && !e.shiftKey) return run(() => st.setModal({ kind: "newProject" }));
-      if (k === "," ) return run(() => st.setModal({ kind: "profiles" }));
-      if (k === "j" && !e.shiftKey) return run(jumpToAttention);
-      if (/^[1-9]$/.test(e.key) && !e.shiftKey && !e.altKey) {
-        const id = e.key === "9" ? st.order[st.order.length - 1] : st.order[Number(e.key) - 1];
-        return id ? run(() => st.setActive(id)) : undefined;
-      }
-      if (e.shiftKey && (e.key === "[" || e.key === "{")) return run(() => st.cycleProject(-1));
-      if (e.shiftKey && (e.key === "]" || e.key === "}")) return run(() => st.cycleProject(1));
-      if (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowUp")) return run(() => st.focusAdjacent(-1));
-      if (e.altKey && (e.key === "ArrowRight" || e.key === "ArrowDown")) return run(() => st.focusAdjacent(1));
-      if (!project) return;
-      if (k === "t" && e.shiftKey) return run(() => st.addTerminal(project.id, { claude: false }));
-      if (k === "c" && e.shiftKey) return run(() => st.addTerminal(project.id, { claude: true }));
-      if (k === "d" && !inEditor) return run(() => st.addTerminal(project.id, { claude: false, split: e.shiftKey ? "column" : "row" }));
-      if (k === "j" && e.shiftKey) return run(() => st.togglePanel(project.id));
-      if (k === "m" && e.shiftKey) return run(() => st.togglePanelMaximized(project.id));
-      if (k === "w" && !e.shiftKey) {
-        return run(() => {
-          if (inEditor) {
-            const g = project.editorGroups.find((x) => x.id === project.activeEditorGroupId);
-            if (g?.activeTabId) void closeEditors(project.id, [g.activeTabId]);
-          } else if (project.focusedPaneId) st.closePane(project.id, project.focusedPaneId);
-        });
-      }
-      if (e.key === "\\" && inEditor) {
-        const g = project.editorGroups.find((x) => x.id === project.activeEditorGroupId);
-        return run(() => g?.activeTabId && st.moveEditorTab(project.id, g.activeTabId, "new"));
-      }
-      if (k === "b") return run(() => st.updateProject(project.id, { sidebarOpen: !project.sidebarOpen }));
-      if (k === "g" && e.shiftKey)
-        return run(() => st.updateProject(project.id, { sidebarOpen: !(project.sidebarOpen && project.sidebarTab === "git"), sidebarTab: "git" }));
-      if (k === "e" && e.shiftKey)
-        return run(() => st.updateProject(project.id, { sidebarOpen: !(project.sidebarOpen && project.sidebarTab === "files"), sidebarTab: "files" }));
-      if (k === "k" && !inEditor) return run(() => project.focusedPaneId && terminals.clear(project.focusedPaneId));
+      if (!e.metaKey && !e.ctrlKey && !(e.altKey && e.key.length > 1)) return; // plain typing never hits a binding
+      const b = resolveKey(e, bindings);
+      if (!b) return;
+      e.preventDefault();
+      e.stopPropagation();
+      COMMAND_MAP.get(b.command)?.run(b.args);
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, []);
+  }, [userBindings]);
 }
 
 export default function App() {
@@ -187,12 +110,12 @@ export default function App() {
   const setModal = useWorkspace((s) => s.setModal);
 
   useEffect(() => {
+    void useTheming.getState().init();
     void useWorkspace.getState().restore();
   }, []);
   useBackendEvents();
   useGitPolling();
   useDockBadge();
-  useTheme();
   useShortcuts();
 
   return (

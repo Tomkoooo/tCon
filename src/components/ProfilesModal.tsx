@@ -3,6 +3,7 @@ import { api } from "../api";
 import { PALETTE, useWorkspace } from "../store/workspace";
 import type { Profile } from "../types";
 import { Modal } from "./Modal";
+import { AppearanceSettings, KeybindingList } from "./AppearanceSettings";
 
 function envToText(env: Record<string, string>) {
   return Object.entries(env).map(([k, v]) => `${k}=${v}`).join("\n");
@@ -24,8 +25,6 @@ export function ProfilesModal() {
   const setModal = useWorkspace((s) => s.setModal);
   const profiles = useWorkspace((s) => s.profiles);
   const loadProfiles = useWorkspace((s) => s.loadProfiles);
-  const theme = useWorkspace((s) => s.theme);
-  const setTheme = useWorkspace((s) => s.setTheme);
   const [editing, setEditing] = useState<(Profile & { envText: string }) | null>(null);
   const [error, setError] = useState("");
 
@@ -50,16 +49,7 @@ export function ProfilesModal() {
   return (
     <Modal title="Settings" onClose={() => setModal(null)}>
       <div className="modal-body">
-        <div className="field">
-          <span className="field-label">Theme</span>
-          <div className="row">
-            {(["system", "dark", "light"] as const).map((t) => (
-              <label key={t} className="check">
-                <input type="radio" name="theme" checked={theme === t} onChange={() => setTheme(t)} /> {t}
-              </label>
-            ))}
-          </div>
-        </div>
+        <AppearanceSettings />
         <div className="field">
           <span className="field-label">Accounts / launch profiles</span>
           <div className="hint">
@@ -109,15 +99,7 @@ export function ProfilesModal() {
           )}
           {!editing && <button className="btn" style={{ alignSelf: "flex-start" }} onClick={startNew}>+ New profile</button>}
         </div>
-        <div className="field">
-          <span className="field-label">Keyboard shortcuts</span>
-          <div className="hint" style={{ lineHeight: 1.9 }}>
-            <span className="kbd">⌘T</span> new project · <span className="kbd">⇧⌘C</span> new Claude pane · <span className="kbd">⌘D</span>/<span className="kbd">⇧⌘D</span> split ·{" "}
-            <span className="kbd">⌘W</span> close pane · <span className="kbd">⌘1–9</span> switch tab · <span className="kbd">⇧⌘[ ]</span> prev/next tab ·{" "}
-            <span className="kbd">⌥⌘←→</span> prev/next pane · <span className="kbd">⌘B</span> sidebar · <span className="kbd">⇧⌘G</span> git ·{" "}
-            <span className="kbd">⌘K</span> clear · <span className="kbd">⌘J</span> jump to session needing attention
-          </div>
-        </div>
+        <KeybindingList />
       </div>
     </Modal>
   );

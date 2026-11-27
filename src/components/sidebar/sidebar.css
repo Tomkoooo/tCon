@@ -153,11 +153,11 @@
 }
 
 .sb-git-modified .sb-name, .sb-git-modified .sb-badge,
-.sb-git-renamed .sb-name, .sb-git-renamed .sb-badge { color: var(--warn); }
-.sb-git-added .sb-name, .sb-git-added .sb-badge,
-.sb-git-untracked .sb-name, .sb-git-untracked .sb-badge { color: var(--ok); }
-.sb-git-deleted .sb-name, .sb-git-deleted .sb-badge,
-.sb-git-conflict .sb-name, .sb-git-conflict .sb-badge { color: var(--danger); }
+.sb-git-renamed .sb-name, .sb-git-renamed .sb-badge { color: var(--git-modified, var(--warn)); }
+.sb-git-added .sb-name, .sb-git-added .sb-badge { color: var(--git-added, var(--ok)); }
+.sb-git-untracked .sb-name, .sb-git-untracked .sb-badge { color: var(--git-untracked, var(--ok)); }
+.sb-git-deleted .sb-name, .sb-git-deleted .sb-badge { color: var(--git-deleted, var(--danger)); }
+.sb-git-conflict .sb-name, .sb-git-conflict .sb-badge { color: var(--git-conflict, var(--danger)); }
 .sb-git-deleted .sb-name { text-decoration: line-through; }
 
 /* ---------- Git panel ---------- */
@@ -309,11 +309,11 @@
 .sb-commit-row { display: flex; }
 .sb-commit-btn {
   flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 26px; border: none;
-  border-radius: 5px 0 0 5px; background: var(--accent); color: #fff; font: inherit; font-size: 12.5px; cursor: pointer;
+  border-radius: 5px 0 0 5px; background: var(--accent); color: var(--accent-fg); font: inherit; font-size: 12.5px; cursor: pointer;
 }
 .sb-commit-more {
-  width: 26px; height: 26px; border: none; border-left: 1px solid color-mix(in srgb, #fff 25%, transparent);
-  border-radius: 0 5px 5px 0; background: var(--accent); color: #fff; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border: none; border-left: 1px solid color-mix(in srgb, var(--accent-fg) 25%, transparent);
+  border-radius: 0 5px 5px 0; background: var(--accent); color: var(--accent-fg); cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
 }
 .sb-commit-btn:hover:not(:disabled), .sb-commit-more:hover:not(:disabled) { filter: brightness(1.1); }
 .sb-commit-btn:disabled, .sb-commit-more:disabled { opacity: .5; cursor: default; }
@@ -331,7 +331,6 @@
 .sb-change { padding-right: 8px; }
 
 /* ---------- commit sync state (graph) ---------- */
-.sb-git { --sync-out: #e8a33d; --sync-in: #4fb5e8; --sync-local: #b884f0; }
 .sb-graph-row.sb-sync-outgoing { background: color-mix(in srgb, var(--sync-out) 9%, transparent); box-shadow: inset 2px 0 0 var(--sync-out); }
 .sb-graph-row.sb-sync-outgoing .sb-graph-summary { color: var(--fg); font-weight: 600; }
 .sb-graph-row.sb-sync-incoming { background: color-mix(in srgb, var(--sync-in) 8%, transparent); box-shadow: inset 2px 0 0 var(--sync-in); }

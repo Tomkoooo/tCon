@@ -1,4 +1,4 @@
-import { jumpToAttention } from "../App";
+import { jumpToAttention } from "../commands";
 import { useWorkspace } from "../store/workspace";
 
 export function StatusBar() {

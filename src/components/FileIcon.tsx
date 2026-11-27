@@ -1,47 +1,32 @@
-import icons from "virtual:file-icons";
 import { useIsDark } from "../theme";
+import { useTheming } from "../theming/store";
+import { resolveIcon, useAsset, type ResolvedIcon } from "../theming/iconTheme";
 
-// Extensions Material Icon Theme only maps via VS Code language ids.
-const EXT_LANG: Record<string, string> = {
-  ts: "typescript", mts: "typescript", cts: "typescript", js: "javascript", cjs: "javascript", mjs: "javascript",
-  py: "python", rs: "rust", go: "go", md: "markdown", json: "json", css: "css", html: "html", htm: "html",
-  sh: "shellscript", bash: "shellscript", zsh: "shellscript", yml: "yaml", yaml: "yaml", xml: "xml", sql: "sql",
-  c: "c", h: "c", cpp: "cpp", hpp: "cpp", java: "java", rb: "ruby", php: "php", swift: "swift", kt: "kotlin",
-};
-
-function lookup(map: Record<string, string>, light: Record<string, string>, key: string, isLight: boolean) {
-  return (isLight && light[key]) || map[key];
-}
-
-export function fileIconName(name: string, isLight: boolean): string {
-  const lower = name.toLowerCase();
-  const L = icons.light;
-  const byName = lookup(icons.fileNames, L.fileNames, lower, isLight);
-  if (byName) return byName;
-  // Longest compound extension first: "foo.test.ts" → "test.ts" → "ts".
-  const parts = lower.split(".");
-  for (let i = 1; i < parts.length; i++) {
-    const ext = parts.slice(i).join(".");
-    const hit = lookup(icons.fileExtensions, L.fileExtensions, ext, isLight);
-    if (hit) return hit;
-  }
-  const lang = EXT_LANG[parts[parts.length - 1]];
-  const byLang = lang && lookup(icons.languageIds, L.languageIds, lang, isLight);
-  return byLang || icons.file;
-}
-
-export function folderIconName(name: string, open: boolean, isLight: boolean): string {
-  const lower = name.toLowerCase();
-  const L = icons.light;
-  return open
-    ? lookup(icons.folderNamesExpanded, L.folderNamesExpanded, lower, isLight) || icons.folderExpanded
-    : lookup(icons.folderNames, L.folderNames, lower, isLight) || icons.folder;
-}
-
-const iconUrl = (name: string) => `/file-icons/${name}.svg`;
-
+/** File/folder icon from the active VS Code icon theme (workbench.iconTheme). */
 export function FileIcon({ name, dir, open, size = 16 }: { name: string; dir?: boolean; open?: boolean; size?: number }) {
-  const isLight = !useIsDark();
-  const icon = dir ? folderIconName(name, !!open, isLight) : fileIconName(name, isLight);
-  return <img className="file-icon" src={iconUrl(icon)} width={size} height={size} alt="" draggable={false} />;
+  const light = !useIsDark();
+  const theme = useTheming((s) => s.iconTheme);
+  if (!theme) return <span className="file-icon" style={{ width: size, height: size }} />;
+  const icon = resolveIcon(theme, name, { dir, open, light });
+  return <Icon icon={icon} size={size} />;
+}
+
+function Icon({ icon, size }: { icon: ResolvedIcon | null; size: number }) {
+  const assetUrl = useAsset(icon?.kind === "asset" ? icon.path : null);
+  const box = { width: size, height: size };
+  if (!icon) return <span className="file-icon" style={box} />;
+  if (icon.kind === "glyph") {
+    const pct = icon.size?.endsWith("%") ? parseFloat(icon.size) / 100 : 1;
+    return (
+      <span
+        className="file-icon file-icon-glyph"
+        style={{ ...box, fontFamily: icon.family, color: icon.color, fontSize: Math.round(size * pct), lineHeight: `${size}px` }}
+      >
+        {icon.char}
+      </span>
+    );
+  }
+  const src = icon.kind === "url" ? icon.url : assetUrl;
+  if (!src) return <span className="file-icon" style={box} />;
+  return <img className="file-icon" src={src} width={size} height={size} alt="" draggable={false} />;
 }

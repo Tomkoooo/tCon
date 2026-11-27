@@ -4,6 +4,7 @@ mod fs;
 mod git;
 pub mod osc;
 mod pty;
+mod themes;
 
 use db::{Db, Profile, RecentPath};
 use pty::{PtyManager, SpawnOptions};
@@ -159,6 +160,13 @@ pub fn run() {
             cli::claude_auth_status,
             cli::claude_auth_logout,
             cli::account_prepare_dir,
+            themes::themes_scan,
+            themes::theme_load,
+            themes::icon_theme_load,
+            themes::theme_asset,
+            themes::config_init,
+            themes::config_read,
+            themes::config_write,
             fs::fs_list_dir,
             fs::fs_read_text,
             fs::fs_write_text,

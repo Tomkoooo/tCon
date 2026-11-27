@@ -6,7 +6,8 @@ import { basicSetup } from "codemirror";
 import { Compartment, EditorState, Prec } from "@codemirror/state";
 import type { Extension, Text } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
-import { oneDark } from "@codemirror/theme-one-dark";
+import { syntaxHighlighting } from "@codemirror/language";
+import { themedHighlightStyle } from "../../theming/syntax";
 import MarkdownIt from "markdown-it";
 import { api } from "../../api";
 import type { FsChangedEvent } from "../../types";
@@ -65,15 +66,33 @@ function formatSize(n: number): string {
 }
 
 const baseTheme = EditorView.theme({
-  "&": { height: "100%", fontSize: "13px" },
+  "&": { height: "100%", fontSize: "var(--editor-font-size, 13px)" },
   "&.cm-focused": { outline: "none" },
-  ".cm-scroller": { fontFamily: "var(--font-mono)", lineHeight: "1.5" },
+  ".cm-scroller": { fontFamily: "var(--editor-font, var(--font-mono))", lineHeight: "var(--editor-line-height, 1.5)" },
 });
-const lightTheme = EditorView.theme({
-  "&": { backgroundColor: "var(--bg)", color: "var(--fg)" },
-  ".cm-gutters": { backgroundColor: "var(--bg)", color: "var(--fg-dim)", borderRight: "1px solid var(--border)" },
-}, { dark: false });
-const themeFor = (dark: boolean): Extension => (dark ? oneDark : lightTheme);
+// All colors come from CSS variables set by the active color theme (see theming/).
+const colorTheme = (dark: boolean) =>
+  EditorView.theme(
+    {
+      "&": { backgroundColor: "var(--editor-bg)", color: "var(--syn-default-fg, var(--editor-fg))" },
+      ".cm-content": { caretColor: "var(--editor-cursor)" },
+      ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--editor-cursor)" },
+      "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
+        { backgroundColor: "var(--editor-selection) !important" },
+      ".cm-activeLine": { backgroundColor: "var(--editor-line-highlight)" },
+      ".cm-selectionMatch": { backgroundColor: "var(--editor-match)" },
+      "&.cm-focused .cm-matchingBracket, &.cm-focused .cm-nonmatchingBracket": { backgroundColor: "var(--editor-bracket-match)" },
+      ".cm-gutters": { backgroundColor: "var(--editor-gutter-bg)", color: "var(--editor-line-number)", border: "none" },
+      ".cm-activeLineGutter": { backgroundColor: "transparent", color: "var(--editor-line-number-active)" },
+      ".cm-foldPlaceholder": { backgroundColor: "transparent", border: "none", color: "var(--editor-fold)" },
+      ".cm-tooltip, .cm-panels": { backgroundColor: "var(--menu-bg)", color: "var(--menu-fg)", border: "1px solid var(--menu-border)" },
+      ".cm-tooltip-autocomplete > ul > li[aria-selected]": { backgroundColor: "var(--menu-selection-bg)", color: "var(--menu-selection-fg)" },
+      ".cm-searchMatch": { backgroundColor: "var(--editor-match)", outline: "1px solid var(--accent)" },
+      ".cm-searchMatch.cm-searchMatch-selected": { backgroundColor: "var(--editor-selection)" },
+    },
+    { dark },
+  );
+const themeFor = (dark: boolean): Extension => [colorTheme(dark), syntaxHighlighting(themedHighlightStyle)];
 
 const md = new MarkdownIt({ html: false, linkify: true, typographer: false });
 
