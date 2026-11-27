@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { GitCommit, GitCommitDetails } from "../../types";
 import { Icon, type IconName } from "../icons";
 import { graphColor } from "./graphLayout";
+import { shortRef } from "./refText";
 import { commitWebUrl, remoteToWeb } from "./gitWeb";
 
 // ---------------------------------------------------------------- ref badges
@@ -50,7 +51,7 @@ const PILL_ICON: Record<RefPill["kind"], IconName> = {
   current: "target", branch: "branch", remote: "cloud", cloud: "cloud", tag: "tag", head: "target",
 };
 
-export function RefPills({ pills, color, max = 3 }: { pills: RefPill[]; color: number; max?: number }) {
+export function RefPills({ pills, color, max = 3, full }: { pills: RefPill[]; color: number; max?: number; full?: boolean }) {
   const shown = pills.slice(0, max);
   const rest = pills.length - shown.length;
   return (
@@ -58,7 +59,7 @@ export function RefPills({ pills, color, max = 3 }: { pills: RefPill[]; color: n
       {shown.map((p, i) => (
         <span key={i} className={`sb-ref sb-ref-${p.kind}${p.label ? "" : " sb-ref-icon"}`} title={p.title}>
           <Icon name={PILL_ICON[p.kind]} size={12} />
-          {p.label && <span className="sb-ref-label">{p.label}</span>}
+          {p.label && <span className="sb-ref-label">{full ? p.label : shortRef(p.label)}</span>}
         </span>
       ))}
       {rest > 0 && <span className="sb-ref sb-ref-more" title={pills.slice(max).map((p) => p.title).join("\n")}>+{rest}</span>}
@@ -223,7 +224,7 @@ export function CommitCard({
       )}
 
       {pills.length > 0 && (
-        <div className="sb-card-refs"><RefPills pills={pills} color={color} max={8} /></div>
+        <div className="sb-card-refs"><RefPills pills={pills} color={color} max={8} full /></div>
       )}
 
       <div className="sb-card-hash">

@@ -10,6 +10,9 @@ Each release's section becomes its GitHub release notes.
 ### Added
 - Quick panel: drag it by its top edge, project bar or footer to move it. It reopens where you left it; double-click the handle to centre it again.
 
+### Changed
+- Git graph: rows with branch or tag badges show a 20-character subject, and long badge names are shortened in the middle (`origin/fe…rect-loop`), so every badge fits. Hover for the full names.
+
 ### Fixed
 - Tasks: `#label` and `!priority` in a task title now work in the Tasks sidebar box and the board's inline add too, not only in the quick panel.
 - Board: adding several cards in a row (⇧↵) no longer scrolls the column to the new card, so the input stays in view.
