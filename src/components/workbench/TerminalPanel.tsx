@@ -159,7 +159,6 @@ function TermTab({ project, tab, active }: { project: Project; tab: TerminalTab;
     <>
     <div
       className={`term-tab${active ? " active" : ""}${status?.state === "blocked" ? " attn" : ""}`}
-      style={{ ["--pane-accent" as string]: project.color }}
       title={[panes.map((p) => `${p.title} — ${p.cwd}`).join("\n"), msg].filter(Boolean).join("\n")}
       data-drop-kind={DRAG_KIND}
       data-id={tab.id}

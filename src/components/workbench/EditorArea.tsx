@@ -148,7 +148,6 @@ function EditorTabButton({ project, group, tab, index, canSplit }: { project: Pr
     <>
       <div
         className={`ed-tab${active ? " active" : ""}${tab.preview ? " preview" : ""}${dirty ? " dirty" : ""}`}
-        style={{ ["--pane-accent" as string]: project.color }}
         title={tab.path}
         data-drop-kind={DRAG_KIND}
         data-role="tab"

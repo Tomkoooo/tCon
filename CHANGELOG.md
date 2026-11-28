@@ -14,6 +14,9 @@ Each release's section becomes its GitHub release notes.
 - **Switch accounts on usage limit**: when a Claude session hits its 5-hour or weekly limit, tCon can switch to your next Claude account that isn't limited and continue the session (or the task agent) there. It never goes in circles: when every account is limited it stops and switches to the account whose limit resets first, at that time. Turn it on for all sessions from the account chip or Settings → Accounts (`claude.accountAutoSwitch`), or for one board's agents in its Run queue panel.
 - Usage per account: the account chip, its switch menu and Settings → Accounts show the 5-hour and weekly usage Claude Code reports (for example "5h 85% · Week 40%") and, once an account is limited, when its limit resets. tCon only sees what Claude Code prints in the terminal, so the numbers appear once Claude warns about them.
 
+### Changed
+- Project tabs are easier to tell apart: each tab is tinted with its project's color and has a full-width color bar, and the active project stands out with a bold name. Terminal and editor tabs inside a project no longer use the project color. Their active tab is marked in a neutral color, so color only tells you which project you're in.
+
 ### Fixed
 - Drag and drop works again in the tab bars: drag a project tab, a terminal tab or an editor tab to reorder it (a line shows where it will land, Esc cancels). Editor tabs can still be dragged into another group or to the right edge of a group to split, and project tabs onto a bookmark folder.
 - Task agents and planners with a long prompt (long task titles, several tasks at once) no longer get stuck at the shell's `quote>` prompt without starting Claude. Long startup commands are now handed to the shell through a short-lived private script instead of being typed in, which the macOS terminal cut off after 1024 bytes.
