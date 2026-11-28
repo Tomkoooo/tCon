@@ -4,6 +4,9 @@ import { useWorkspace } from "../store/workspace";
 import type { Account, AuthStatus } from "../types";
 import { useContextMenu, type MenuItem } from "./ContextMenu";
 import { Icon } from "./icons";
+import { usageText } from "../accountRotation";
+import { AUTO_SWITCH_SETTING, autoSwitchMode } from "../autoSwitch";
+import { useTheming } from "../theming/store";
 
 type Status = ReturnType<typeof useAccounts.getState>["status"][string];
 
@@ -34,6 +37,9 @@ export function AccountChip() {
   const loginsInFlight = useAccounts((s) => Object.keys(s.logins).length);
   const showNudge = useAccounts((s) => !s.nudgeDismissed && s.accounts.length === 1);
   const hasProject = useWorkspace((s) => !!s.activeProjectId);
+  const limits = useAccounts((s) => s.limits);
+  const usage = useAccounts((s) => s.usage);
+  useTheming((s) => s.settings[AUTO_SWITCH_SETTING]); // re-render the menu check
   const menu = useContextMenu();
 
   const active = accounts.find((a) => a.id === activeId) ?? accounts[0];
@@ -41,6 +47,7 @@ export function AccountChip() {
   const loggedIn = !!st?.loggedIn;
   const plan = planLabel(st);
   const error = st && "error" in st ? st.error : null;
+  const use = usageText(limits[active.id], usage[active.id]);
 
   const open = (e: React.MouseEvent) => {
     const acc = useAccounts.getState();
@@ -57,6 +64,7 @@ export function AccountChip() {
               <div className="account-menu-sub">
                 {[plan, loggedIn ? org ?? (active.configDir ? "Separate login" : "Default account") : accountLabel(active, st)].filter(Boolean).join(" · ")}
               </div>
+              {use && <div className={`account-menu-usage${use.limited ? " limited" : ""}`} title={use.long}>{use.short}</div>}
             </div>
           </div>
         ),
@@ -97,9 +105,11 @@ export function AccountChip() {
       items.push("sep", { header: "Switch account" });
       for (const a of accounts) {
         const s = acc.status[a.id];
+        const u = usageText(acc.limits[a.id], acc.usage[a.id]);
         items.push({
           label: accountLabel(a, s),
-          hint: s?.loggedIn ? planLabel(s) ?? undefined : "logged out",
+          hint: !s?.loggedIn ? "logged out" : u ? u.short : planLabel(s) ?? undefined,
+          title: u?.long,
           checked: a.id === activeId,
           action: () => void acc.setActive(a.id),
         });
@@ -125,6 +135,15 @@ export function AccountChip() {
         },
       });
     }
+    if (accounts.length > 1) {
+      const on = autoSwitchMode() === "everywhere";
+      items.push({
+        label: "Auto-Switch on Usage Limit",
+        checked: on,
+        title: "When a Claude session hits its usage limit, switch to the next account that isn't limited and continue there",
+        action: () => void useTheming.getState().setSetting(AUTO_SWITCH_SETTING, on ? "off" : "everywhere"),
+      });
+    }
     items.push(
       "sep",
       { label: "Manage Accounts…", action: openAccountSettings },
@@ -137,12 +156,13 @@ export function AccountChip() {
     <>
       <button
         className={`account-chip${loggedIn ? "" : " warn"}`}
-        title={error ?? (loggedIn ? `Claude Code account: ${accountLabel(active, st)}${accountOrg(st) ? `\n${accountOrg(st)}` : ""}` : "Claude Code: not logged in")}
+        title={error ?? (loggedIn ? `Claude Code account: ${accountLabel(active, st)}${accountOrg(st) ? `\n${accountOrg(st)}` : ""}${use ? `\n${use.long}` : ""}` : "Claude Code: not logged in")}
         onClick={open}
       >
         <span className="account-dot" />
         <span className="account-name">{st ? (loggedIn ? accountLabel(active, st) : "Not logged in") : "…"}</span>
         {loginsInFlight > 0 ? <span className="account-plan">Logging in…</span> : plan && <span className="account-plan">{plan}</span>}
+        {use && loginsInFlight === 0 && <span className={`account-usage${use.limited ? " limited" : ""}`}>{use.short}</span>}
         {showNudge && <span className="account-nudge-dot" />}
         <Icon name="chevronDown" size={12} />
       </button>

@@ -16,6 +16,7 @@ import { notifyTask } from "../notify";
 import { listen } from "@tauri-apps/api/event";
 import { isSessionId, sessionsApi } from "../claudeSessions";
 import { accountEnv } from "../store/accounts";
+import { handleLimit, installAutoSwitch } from "../autoSwitch";
 
 const trim = (p: string) => (p.length > 1 ? p.replace(/\/+$/, "") : p);
 const shq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
@@ -44,7 +45,7 @@ export function agentView(task: Task, pane: PaneStatus | undefined, alive: boole
   if (a === "failed" || (alive && pane?.state === "error" && a === "running")) return { kind: "failed", label: "Failed", title: "The agent failed — see the progress log" };
   if (a === "queued") return { kind: "queued", label: "Queued", title: "Waiting for a free agent slot" };
   if (a === "interrupted") return { kind: "interrupted", label: "Interrupted", title: "The agent's session ended unexpectedly (app closed, restart, crash); it can resume where it left off" };
-  if (a === "limited") return { kind: "limited", label: "Usage limit", title: "Paused by a Claude usage limit; resumes after the reset or when you switch accounts" };
+  if (a === "limited") return { kind: "limited", label: "Usage limit", title: "Paused by a Claude usage limit; resumes after the reset or when the account switches (by hand or with auto-switch)" };
   if (a === "planning") {
     if (task.paneId && !alive) return { kind: "detached", label: "Planner ended", title: "The planning agent's terminal is gone" };
     return { kind: "planning", label: "Planning", title: "Claude is planning this task (no code changes)" };
@@ -562,8 +563,13 @@ async function onLimit(paneId: string, message: string, resetAt: number | null) 
       limitPaused.add(root);
       await useTasks.getState().saveSettings(root, { paused: true });
     }
+    // Auto-switch: a switch moves limited agents via the account subscription below.
+    const outcome = await handleLimit(paneId, message, resetAt, { boardOptIn: st.board.settings.autoSwitchAccount });
+    if (outcome.kind === "move") void onAccountSwitch(outcome.prevConfig);
     const name = projectForRoot(root)?.name ?? root;
-    void notifyTask(`${name} · usage limit`, `${t.id} paused${when ? ` until ${when}` : ""}. Switch accounts to continue now.`);
+    if (outcome.kind !== "switched" && outcome.kind !== "move") {
+      void notifyTask(`${name} · usage limit`, `${t.id} paused${when ? ` until ${when}` : ""}.${outcome.kind === "exhausted" ? "" : " Switch accounts to continue now."}`);
+    }
     if (resetAt) {
       window.clearTimeout(limitTimers.get(root));
       const ms = Math.max(30_000, resetAt * 1000 - Date.now() + 60_000);
@@ -571,9 +577,10 @@ async function onLimit(paneId: string, message: string, resetAt: number | null) 
     }
     return;
   }
-  // Not a task agent: tell the user about the session.
+  // Not a task agent: switch accounts (and resume it there) or tell the user about the session.
   const found = findPane(useWorkspace.getState(), paneId);
-  if (found) void notifyTask(`${found[0].name} · Claude usage limit`, message);
+  const outcome = await handleLimit(paneId, message, resetAt, { restartPane: true });
+  if (found && (outcome.kind === "off" || outcome.kind === "foreign")) void notifyTask(`${found[0].name} · Claude usage limit`, message);
 }
 
 /** Continue agents paused by a usage limit (after the reset, or on another account). */
@@ -673,6 +680,7 @@ export function installAgentRuntime(): () => void {
   if (runtimeInstalled) return () => {};
   runtimeInstalled = true;
   window.setTimeout(() => void refreshInstalledSkill(), 3000);
+  const offAutoSwitch = installAutoSwitch();
 
   const offLoad = onBoardLoaded((root, prev, next) => {
     // Never on the first load of a board.
@@ -730,6 +738,7 @@ export function installAgentRuntime(): () => void {
 
   return () => {
     runtimeInstalled = false;
+    offAutoSwitch();
     offLoad();
     offWs();
     offAcct();

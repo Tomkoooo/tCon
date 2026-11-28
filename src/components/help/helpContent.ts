@@ -77,6 +77,8 @@ export const HELP_SECTIONS: HelpSection[] = [
     items: [
       { title: "Add an account", how: "Settings → Accounts → Add account. The login runs in a terminal of the current project.", commands: ["tcon.manageAccounts"], action: { label: "Manage accounts", command: "tcon.manageAccounts" } },
       { title: "Switch accounts", how: "Click the account chip in the tab bar and pick another account, or use Switch in Settings → Accounts. New sessions use it; tCon offers to restart idle ones." },
+      { title: "Usage and limits", how: "The account chip and Settings → Accounts show the 5-hour and weekly usage Claude Code last printed for each account (e.g. \"5h 85% · Week 40%\") and, once a limit is hit, when it resets.", action: { label: "Accounts", settings: "accounts" } },
+      { title: "Switch accounts on usage limit", how: "Account chip → Auto-Switch on Usage Limit, or Settings → Accounts, for all sessions; or a board's Run queue → Switch accounts on usage limit for its agents only. tCon moves to the next account that isn't limited and resumes the session there. When every account is limited it stops, and switches to the account whose limit resets first at that time.", action: { label: "Accounts", settings: "accounts" } },
       { title: "Per-project account", how: "Pin a project to one account in Project Settings." },
       { title: "What is shared", how: "settings.json, CLAUDE.md, commands, agents, skills, plugins and project history are shared. Only the login is separate." },
       { title: "Where logins live", how: "Each account has its own CLAUDE_CONFIG_DIR under ~/.claude-accounts/. The default account uses ~/.claude." },

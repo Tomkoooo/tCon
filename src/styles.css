@@ -499,6 +499,10 @@ details.advanced > summary::-webkit-details-marker { display: none; }
 .account-chip.warn .account-dot { background: var(--warn); }
 .account-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .account-plan { flex: none; color: var(--fg-dim); }
+.account-usage { flex: none; color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+.account-usage.limited, .account-menu-usage.limited, .account-card-usage.limited { color: var(--warn); }
+.account-menu-usage { font-size: var(--fs-s); color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+.account-card-usage { font-size: var(--fs-s); color: var(--fg-dim); font-variant-numeric: tabular-nums; white-space: pre-line; }
 .account-nudge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none; }
 .account-chip .icon { color: var(--fg-dim); }
 .account-menu-head { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2); }

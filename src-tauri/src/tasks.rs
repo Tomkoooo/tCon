@@ -90,6 +90,8 @@ pub struct BoardSettings {
     pub link_node_modules: bool,
     /// Interrupted agents (app closed, machine restarted): "auto" resume | "ask".
     pub resume_interrupted: String,
+    /// Switch to the next Claude account when this board's agent hits a usage limit.
+    pub auto_switch_account: bool,
     /// Share `.tcon/` via git (no `.git/info/exclude` entry).
     pub shared: bool,
 }
@@ -109,6 +111,7 @@ impl Default for BoardSettings {
             worktree_setup: String::new(),
             link_node_modules: true,
             resume_interrupted: "ask".into(),
+            auto_switch_account: false,
             shared: false,
         }
     }

@@ -141,6 +141,8 @@ export function RunQueuePanel({ root, state, onClose }: { root: string; state: B
             { value: "auto", label: "Resume automatically" },
           ]}
         />
+        <span className="tkq-label" title="When an agent hits a Claude usage limit (5-hour or weekly), switch to the next account that isn't limited and continue there. Settings → Accounts can turn this on for all sessions.">Switch accounts on usage limit</span>
+        <Toggle checked={s.autoSwitchAccount} onChange={(v) => save({ autoSwitchAccount: v })} />
         <span className="tkq-label" title="Each agent works on its own branch (tcon/T-n) in a separate git worktree">Isolation</span>
         <Segmented<BoardSettings["isolation"]>
           ariaLabel="Isolation"

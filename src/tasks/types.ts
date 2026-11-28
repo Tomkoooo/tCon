@@ -54,6 +54,8 @@ export interface BoardSettings {
   linkNodeModules: boolean;
   /** interrupted agents (app closed, restart): resume automatically or ask */
   resumeInterrupted: "ask" | "auto";
+  /** switch to the next Claude account when an agent hits a usage limit */
+  autoSwitchAccount: boolean;
   shared: boolean;
 }
 
@@ -69,6 +71,7 @@ export const DEFAULT_SETTINGS: BoardSettings = {
   worktreeSetup: "",
   linkNodeModules: true,
   resumeInterrupted: "ask",
+  autoSwitchAccount: false,
   shared: false,
 };
 

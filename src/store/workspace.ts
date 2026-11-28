@@ -205,6 +205,17 @@ export function paneEnv(profiles: Profile[], project: Project, pane: Pane): Reco
   return { ...accountEnv(), ...profileEnv(profiles, pane.profileId ?? project.profileId), ...(project.env ?? {}), ...(pane.env ?? {}) };
 }
 
+/** CLAUDE_CONFIG_DIR each pane's process was started with ("" = the default ~/.claude), so a
+ *  usage limit can be pinned on the right account after the global account changed. */
+const paneConfigDirs = new Map<string, string>();
+export function paneConfigDir(paneId: string): string | null | undefined {
+  const d = paneConfigDirs.get(paneId);
+  return d === undefined ? undefined : d || null;
+}
+function recordConfigDir(paneId: string, env: Record<string, string>, always: boolean) {
+  if (always || !paneConfigDirs.has(paneId)) paneConfigDirs.set(paneId, env.CLAUDE_CONFIG_DIR ?? "");
+}
+
 const sameDiff = (a: EditorTab["diff"], b: EditorTab["diff"]) =>
   (!a && !b) || (!!a && !!b && a.file === b.file && a.staged === b.staged);
 
@@ -231,7 +242,9 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     set((s) => (s.projects[id] ? { projects: { ...s.projects, [id]: fn(s.projects[id]) } } : s));
 
   const spawn = (project: Project, pane: Pane) => {
-    terminals.ensure(withSessionTracking(withClaudeModel(project, pane)), paneEnv(get().profiles, project, pane));
+    const env = paneEnv(get().profiles, project, pane);
+    recordConfigDir(pane.id, env, false);
+    terminals.ensure(withSessionTracking(withClaudeModel(project, pane)), env);
   };
 
   const dropStatuses = (ids: string[]) =>
@@ -522,7 +535,9 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       patchProject(project.id, (p) => ({ ...p, panes: { ...p.panes, [paneId]: { ...pane, exited: false, exitCode: null } } }));
       dropStatuses([paneId]);
       const run = command !== undefined ? { ...pane, startupCommand: command } : pane;
-      terminals.respawn(withSessionTracking(withClaudeModel(project, run)), paneEnv(get().profiles, project, run));
+      const env = paneEnv(get().profiles, project, run);
+      recordConfigDir(paneId, env, true);
+      terminals.respawn(withSessionTracking(withClaudeModel(project, run)), env);
     },
 
     resizeSplit(projectId, splitId, sizes) {

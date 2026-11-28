@@ -43,6 +43,14 @@ struct LimitEvent {
     hit: crate::limits::LimitHit,
 }
 
+/// Claude Code warned that the account is close to its usage limit.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct UsageEvent {
+    pane_id: String,
+    usage: crate::limits::UsageNote,
+}
+
 /// A local dev-server URL printed by the pane (for the Browser view).
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -188,7 +196,11 @@ impl PtyManager {
                                 }
                             }
                         }
-                        if let Some(hit) = limits.feed(&out) {
+                        let scan = limits.feed(&out);
+                        if let Some(usage) = scan.usage {
+                            let _ = app.emit_to("main", "pane-usage", UsageEvent { pane_id: pane_id.clone(), usage });
+                        }
+                        if let Some(hit) = scan.hit {
                             let _ = app.emit_to("main", "pane-limit", LimitEvent { pane_id: pane_id.clone(), hit });
                         }
                         for url in dev_urls.feed(&out) {
