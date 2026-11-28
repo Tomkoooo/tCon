@@ -106,6 +106,21 @@ function busyCount(state: BoardState): number {
   return runningIds(state).length;
 }
 
+/** The board's agents are at work: agents running or planning, tasks queued, or the queue stopped.
+ *  Then "Add to queue" is offered next to "start now". */
+export function queueActive(state: BoardState | null | undefined): boolean {
+  if (!state) return false;
+  return !!state.board.settings.paused || state.tasks.some((t) => t.agent === "queued" || (["running", "blocked", "planning"].includes(t.agent) && !!livePane(t)));
+}
+
+/** An open task that can join the run queue: not queued, no live agent, and no interrupted
+ *  session waiting to be resumed (queueing would start a fresh one). */
+export function canQueue(task: Task): boolean {
+  if (task.status === "done" || task.agent === "queued") return false;
+  if ((task.agent === "interrupted" || task.agent === "limited") && isSessionId(task.session)) return false;
+  return !(livePane(task) && ["running", "blocked", "planning"].includes(task.agent));
+}
+
 /** The run queue in start order: the board's `runQueue` (queued tasks only), then queued
  *  tasks it doesn't list yet (oldest first). */
 export function queueOrder(state: BoardState): string[] {

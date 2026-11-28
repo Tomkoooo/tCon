@@ -1,8 +1,9 @@
 // Run queue panel (board header): auto-pickup, run mode and agent limits, the queue itself
-// (drag to reorder) with why each task waits, a preview of the start groups, and Stop / Resume.
+// (drag to reorder, add or remove tasks) with why each task waits, a preview of the start
+// groups, and Stop / Resume.
 import { useMemo, useState } from "react";
 import {
-  enqueue, queuePreview, reorderQueue, resumeQueue, startNextOnly, stopAfterCurrent, stopAgent, stopAllNow, livePane,
+  canQueue, enqueue, queuePreview, reorderQueue, resumeQueue, startNextOnly, stopAfterCurrent, stopAgent, stopAllNow, livePane,
 } from "../../tasks/agent";
 import { useTasks } from "../../tasks/store";
 import type { AutoPickup, BoardSettings, BoardState, PickupPosition } from "../../tasks/types";
@@ -57,6 +58,10 @@ export function RunQueuePanel({ root, state, onClose }: { root: string; state: B
     const t = byId.get(id);
     return t && (t.agent === "idle" || t.agent === "done" || t.agent === "failed" || !t.agent);
   });
+  // Tasks that can join the queue, grouped by column in board order.
+  const addable = state.board.columns
+    .map((c) => ({ col: c, tasks: (state.columns[c.id] ?? []).map((id) => byId.get(id)).filter((t): t is NonNullable<typeof t> => !!t && canQueue(t)) }))
+    .filter((g) => g.tasks.length);
   const parallel = (s.runMode !== "rolling" || s.maxAgents > 1) && s.isolation !== "worktree";
 
   const onDrop = (e: React.DragEvent, index: number) => {
@@ -204,6 +209,25 @@ export function RunQueuePanel({ root, state, onClose }: { root: string; state: B
           );
         })}
       </div>
+
+      {addable.length > 0 && (
+        <div className="tkq-add">
+          <Icon name="plus" size={12} />
+          <Select
+            ariaLabel="Add a task to the queue"
+            title={`Adds the task ${s.pickupPosition === "front" ? "at the front of" : s.pickupPosition === "priority" ? "by priority to" : "at the end of"} the queue`}
+            value=""
+            onChange={(id) => id && void enqueue(root, [id])}
+          >
+            <option value="" disabled>Add a task to the queue…</option>
+            {addable.map((g) => (
+              <optgroup key={g.col.id} label={g.col.title}>
+                {g.tasks.map((t) => <option key={t.id} value={t.id}>{t.id} · {t.title}</option>)}
+              </optgroup>
+            ))}
+          </Select>
+        </div>
+      )}
 
       <div className="tkq-foot">
         {todoIdle.length > 0 && (

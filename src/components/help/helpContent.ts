@@ -120,7 +120,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       { title: "Quick-add tokens", how: "Type #label and !high (or !urgent, !medium, !low) in a task title to set labels and priority." },
       { title: "Plan with Claude", how: "A planning agent reads the task and the code, writes a plan with the files it will touch and its dependencies, and moves the card to Todo without changing code.", commands: ["tasks.planInbox"] },
       { title: "Select several cards", how: "⌘-click or Ctrl-click to add a card, ⇧-click for a range, ⌘A for a whole column, or the column's checkbox. The bar at the bottom plans, starts, queues, moves, re-prioritizes or deletes them. Esc clears." },
-      { title: "Run queue", how: "Board header → Queue: choose what happens when a task enters Todo (nothing, ask, queue it), the run mode (rolling, batches, parallel-safe) and the agent limit, and drag to reorder. Stop after current lets running agents finish.", commands: ["tasks.stopAfterCurrent", "tasks.resumeQueue"] },
+      { title: "Run queue", how: "Board header → Queue: choose what happens when a task enters Todo (nothing, ask, queue it), the run mode (rolling, batches, parallel-safe) and the agent limit, add a task with the picker below the list or remove one with ✕, and drag to reorder. While agents work, the card menu also offers Add to Agent Queue. Stop after current lets running agents finish.", commands: ["tasks.stopAfterCurrent", "tasks.resumeQueue"] },
       { title: "Share the board", how: "Tasks are Markdown files in .tcon/tasks/, kept out of git by default. Board menu → Share Board via Git to commit them." },
       { title: "Use tasks from any Claude session", how: "Board menu → Install tCon Task Skill adds the tcon-tasks skill to Claude Code." },
     ],

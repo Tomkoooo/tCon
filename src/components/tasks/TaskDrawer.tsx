@@ -2,7 +2,7 @@
 // plan, progress log and verification, and run the agent actions.
 import { useEffect, useRef, useState } from "react";
 import { useTasks } from "../../tasks/store";
-import { livePane, openAgentTerminal, planTasks, projectForRoot, startAgent, stopAgent } from "../../tasks/agent";
+import { canQueue, enqueue, livePane, openAgentTerminal, queueActive, planTasks, projectForRoot, startAgent, stopAgent } from "../../tasks/agent";
 import { mergeTaskBranch, openTaskPr, removeTaskWorktree } from "../../tasks/worktree";
 import { PRIORITIES, type BoardState, type Task } from "../../tasks/types";
 import { useWorkspace } from "../../store/workspace";
@@ -260,6 +260,12 @@ export function TaskDrawer({ root, task, state, onClose }: { root: string; task:
               <button className="btn small" disabled={!project} title={project ? undefined : "Open this folder as a project first"} onClick={() => void startAgent(root, task.id)}>
                 <ClaudeMark size={12} />
                 {task.agent === "interrupted" || task.agent === "limited" ? "Resume agent" : task.agent === "done" || task.agent === "failed" ? "Run Claude again" : "Start Claude"}
+              </button>
+            )}
+            {!running && canQueue(task) && queueActive(state) && (
+              <button className="btn small" disabled={!project} title="Start it when the run queue gets to it" onClick={() => void enqueue(root, [task.id])}>
+                <Icon name="queue" size={14} />
+                Add to queue
               </button>
             )}
             {!running && !queued && task.status !== "done" && (
