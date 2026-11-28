@@ -76,6 +76,46 @@ fn default_shell() -> String {
     std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into())
 }
 
+/// Longest startup command typed into the shell as is. The command is written before the shell
+/// has set up its line editor, while the tty is still in canonical mode, and macOS keeps only
+/// MAX_CANON (1024) bytes of a pending line: a longer one (an agent's `claude '<prompt>'`) is
+/// cut off, loses its closing quote and leaves the shell at a `quote>` prompt.
+const MAX_TYPED_COMMAND: usize = 512;
+
+/// The line to type for a startup command: the command itself when it's short, otherwise
+/// `source <script>` for a private one-shot script (0600, deletes itself) that holds it.
+fn typed_startup_line(cmd: &str, pane_id: &str) -> String {
+    if cmd.len() <= MAX_TYPED_COMMAND {
+        return cmd.to_string();
+    }
+    match write_startup_script(cmd, pane_id) {
+        Ok(path) => format!("source {}", sh_quote(&path.to_string_lossy())),
+        Err(e) => {
+            eprintln!("tCon: couldn't write startup script: {e}");
+            cmd.to_string()
+        }
+    }
+}
+
+fn sh_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
+fn write_startup_script(cmd: &str, pane_id: &str) -> std::io::Result<std::path::PathBuf> {
+    use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+    let home = dirs::home_dir().ok_or_else(|| std::io::Error::other("no home directory"))?;
+    let dir = home.join(".tcon").join("run");
+    std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&dir)?;
+    let safe: String = pane_id.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').take(64).collect();
+    let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    let path = dir.join(format!("start-{safe}-{nonce:x}.sh"));
+    let mut f = std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&path)?;
+    // The script removes itself first; the shell keeps reading it from the open file.
+    writeln!(f, "rm -f -- {}", sh_quote(&path.to_string_lossy()))?;
+    writeln!(f, "{cmd}")?;
+    Ok(path)
+}
+
 impl PtyManager {
     pub fn spawn(&self, app: AppHandle, opts: SpawnOptions, on_data: Channel) -> anyhow::Result<()> {
         let pty = native_pty_system();
@@ -113,8 +153,9 @@ impl PtyManager {
         let child = Arc::new(Mutex::new(child));
 
         if let Some(c) = opts.startup_command.as_ref().filter(|c| !c.trim().is_empty()) {
+            let line = typed_startup_line(c.trim(), &opts.pane_id);
             let mut w = writer.lock();
-            let _ = w.write_all(format!("{}\r", c.trim()).as_bytes());
+            let _ = w.write_all(format!("{line}\r").as_bytes());
         }
 
         let pane_id = opts.pane_id.clone();
@@ -220,5 +261,26 @@ impl PtyManager {
         let name = String::from_utf8_lossy(&out.stdout).trim().to_string();
         let name = name.rsplit('/').next().unwrap_or(&name).trim_start_matches('-').to_string();
         if name.is_empty() { None } else { Some(name) }
+    }
+}
+
+#[cfg(test)]
+mod startup_tests {
+    use super::*;
+
+    #[test]
+    fn short_commands_are_typed_as_is() {
+        assert_eq!(typed_startup_line("claude --continue", "p1"), "claude --continue");
+    }
+
+    #[test]
+    fn long_commands_go_through_a_self_deleting_script() {
+        let cmd = format!("cd '/tmp' && claude '{}'", "x".repeat(2000));
+        let line = typed_startup_line(&cmd, "pane-test");
+        assert!(line.starts_with("source '") && line.len() < 200, "{line}");
+        let path = line.trim_start_matches("source '").trim_end_matches('\'');
+        let body = std::fs::read_to_string(path).unwrap();
+        assert!(body.starts_with("rm -f -- ") && body.contains(&cmd));
+        std::fs::remove_file(path).unwrap();
     }
 }
