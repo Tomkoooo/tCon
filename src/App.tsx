@@ -20,6 +20,7 @@ import { useBackgroundBridge } from "./background/bridge";
 import { useTheming } from "./theming/store";
 import { COMMAND_MAP, effectiveBindings, resolveKey } from "./commands";
 import { UpdateNotice } from "./components/UpdateNotice";
+import { PinDialog } from "./components/browser/PinDialog";
 import { startUpdateChecks } from "./updater";
 
 // ---------- backend events ----------
@@ -147,6 +148,7 @@ export default function App() {
       {modal?.kind === "newProject" && <NewProjectModal />}
       {modal?.kind === "profiles" && <ProfilesModal />}
       {modal?.kind === "projectSettings" && <ProjectSettingsModal projectId={modal.projectId} />}
+      <PinDialog />
     </div>
   );
 }

@@ -7,6 +7,9 @@ Each release's section becomes its GitHub release notes.
 
 ## [Unreleased]
 
+### Added
+- **Pinned web apps**: pin any built-in browser page to the activity bar with its own icon (database, server, dashboard, the site's icon…) and color, for every project or just one. Handy for a self-hosted database viewer such as MongoDB Compass web, Adminer, pgweb or CloudBeaver: one click opens it next to your code, or brings back its open tab, and the built-in browser keeps you logged in. Pin from a browser tab's More menu or **Browser: Pin Page to Sidebar…**; right-click a pin to edit, reorder or unpin it. Pins are saved in `settings.json` under `browser.pinnedApps`.
+
 ## [0.2.0-alpha.1] - 2026-11-27
 
 ### Added

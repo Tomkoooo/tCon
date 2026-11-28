@@ -8,6 +8,7 @@ import { browserApi, hostOf, normalizeUrl } from "../../browser/api";
 import { attach, detach, isReady, isShown, retry } from "../../browser/overlay";
 import { useBrowser } from "../../browser/store";
 import { openInChrome } from "../../browser/actions";
+import { newPin } from "../../browser/pins";
 import { useContextMenu } from "../ContextMenu";
 import { writeText } from "../workbench/clipboard";
 import { Icon } from "../icons";
@@ -97,6 +98,7 @@ export function BrowserTab({ project, tab }: { project: Project; tab: EditorTab 
         { label: "Open in Default Browser", action: () => void openUrl(url).catch(() => {}) },
         { label: "Open in tCon Chrome", title: "The managed Chrome profile, with extensions and Chrome DevTools", action: () => void openInChrome(url) },
         "sep",
+        { label: "Pin to Sidebar…", title: "Add this page to the activity bar with its own icon and color", action: () => newPin(project.rootPath, { url, title: page?.title, favicon: page?.favicon }) },
         { label: "Copy URL", action: () => void writeText(url) },
         { label: "Developer Tools", hint: "Web Inspector", action: () => run("devtools") },
       ],

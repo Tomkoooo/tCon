@@ -6,6 +6,7 @@ import { useTasks } from "../../tasks/store";
 import { Icon } from "../icons";
 import "../../browser/store"; // subscribes to browser / dev-server events
 import { openHelp } from "../help/actions";
+import { PinnedApps } from "../browser/PinnedApps";
 
 export function ActivityBar({ project }: { project: Project }) {
   const updateProject = useWorkspace((s) => s.updateProject);
@@ -39,6 +40,7 @@ export function ActivityBar({ project }: { project: Project }) {
       <button className={`ab-btn${on("browser") ? " on" : ""}`} title="Browser (⇧⌘O opens a URL)" aria-label="Browser" onClick={() => toggle("browser")}>
         <Icon name="globe" size={22} />
       </button>
+      <PinnedApps project={project} />
       <span style={{ flex: 1 }} />
       <button className="ab-btn" title="Help (F1)" aria-label="Help" onClick={openHelp}>
         <Icon name="help" size={20} />

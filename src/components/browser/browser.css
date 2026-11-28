@@ -93,3 +93,18 @@
 .br-import-item .legacy-name { min-width: 120px; }
 .br-import-state { margin-left: auto; }
 .br-import-reason { flex: 1; min-width: 200px; padding: var(--sp-1) 0; }
+
+/* pinned web apps (activity bar + pin dialog); --pin-color is the user's chosen color */
+.ab-pins { display: flex; flex-direction: column; align-items: center; border-top: 1px solid var(--activitybar-border, var(--border)); margin-top: var(--sp-1); padding-top: var(--sp-1); }
+.ab-pin-icon {
+  width: 30px; height: 30px; border-radius: var(--radius-l); display: flex; align-items: center; justify-content: center;
+  color: var(--pin-color, currentColor); background: color-mix(in srgb, var(--pin-color, var(--fg-dim)) 14%, transparent);
+}
+.ab-pin:hover .ab-pin-icon, .ab-pin.on .ab-pin-icon { background: color-mix(in srgb, var(--pin-color, var(--fg-dim)) 26%, transparent); }
+.pin-icons { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.pin-icon-opt {
+  width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
+  border: 1px solid var(--border); border-radius: var(--radius-l); background: none; color: var(--fg-dim);
+}
+.pin-icon-opt:hover { color: var(--fg); }
+.pin-icon-opt.selected { color: var(--pin-color, var(--accent)); border-color: var(--pin-color, var(--accent)); background: color-mix(in srgb, var(--pin-color, var(--accent)) 14%, transparent); }
