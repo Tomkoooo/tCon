@@ -18,10 +18,11 @@ import { BackgroundSection } from "./BackgroundSettings";
 import { SettingRow, SettingsGroup, SettingsSearch, SettingsSection, useSetting } from "./settingsKit";
 import { usageText } from "../accountRotation";
 import { AUTO_SWITCH_SETTING } from "../autoSwitch";
+import { CLOSE_AGENT_TERMINALS_SETTING } from "../tasks/agent";
 import { BrowserSection } from "./browser/BrowserSettings";
 import { UpdatesSection } from "./UpdateSettings";
 import { NotificationsSection } from "./NotificationSettings";
-import { Badge, CommitInput, Segmented } from "./ui";
+import { Badge, CommitInput, Segmented, Toggle } from "./ui";
 import { Icon } from "./icons";
 
 const SECTIONS = [
@@ -290,6 +291,20 @@ export function ModelPicker({ value, onChange }: { value: string; onChange(v: st
   );
 }
 
+function CloseAgentTerminalsRow() {
+  const [on, setOn] = useSetting<boolean>(CLOSE_AGENT_TERMINALS_SETTING, true);
+  return (
+    <SettingRow
+      label="Close finished agent terminals"
+      settingKey={CLOSE_AGENT_TERMINALS_SETTING}
+      keywords="task agent terminal close auto group background"
+      description="Task agents' terminals open in the background under Agents. Close each one when its task is done; reopen the chat from the task."
+    >
+      <Toggle checked={on} onChange={setOn} />
+    </SettingRow>
+  );
+}
+
 function ClaudeSection() {
   const raw = useTheming((s) => s.settings[MODEL_SETTING]);
   const setSetting = useTheming((s) => s.setSetting);
@@ -310,6 +325,7 @@ function ClaudeSection() {
       >
         <ModelPicker value={normalizeModel(raw)} onChange={(v) => void setSetting(MODEL_SETTING, v)} />
       </SettingRow>
+      <CloseAgentTerminalsRow />
     </SettingsSection>
   );
 }

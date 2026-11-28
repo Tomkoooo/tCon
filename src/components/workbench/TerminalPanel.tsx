@@ -2,7 +2,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { useCallback } from "react";
 import { aggregateStatus, hasEditors, useWorkspace } from "../../store/workspace";
 import { paneIds } from "../../store/layout";
-import type { LayoutNode, Project, TerminalTab } from "../../types";
+import type { LayoutNode, PaneStatus, Project, TerminalTab } from "../../types";
 import { SplitView } from "../SplitView";
 import { TerminalPane } from "../TerminalPane";
 import { StatusDot } from "../StatusDot";
@@ -77,9 +77,11 @@ export function TerminalPanel({ project }: { project: Project }) {
     <div className="panel">
       <div className="panel-header">
         <div className="panel-tabs">
-          {project.terminalTabs.map((tab) => (
+          {project.terminalTabs.filter((t) => t.group !== "agents").map((tab) => (
             <TermTab key={tab.id} project={project} tab={tab} active={tab.id === activeTab?.id} />
           ))}
+          <AgentGroup project={project} activeTab={activeTab} />
+          {activeTab?.group === "agents" && <TermTab key={activeTab.id} project={project} tab={activeTab} active />}
           <button className="icon-btn panel-new" title="New terminal (⇧⌘T)" aria-label="New terminal" onClick={() => st.addTerminal(project.id, { claude: false })}>
             <Icon name="plus" />
           </button>
@@ -127,16 +129,74 @@ export function TerminalPanel({ project }: { project: Project }) {
   );
 }
 
+function tabTitle(project: Project, tab: TerminalTab, statuses: Record<string, PaneStatus>): string {
+  const first = project.panes[paneIds(tab.layout)[0]];
+  const st = first ? statuses[first.id] : undefined;
+  return (st?.title || first?.title || "terminal").replace(/^[✳✻✽✶✢·*]\s+/, "");
+}
+
+const STATE_LABEL: Partial<Record<PaneStatus["state"], string>> = {
+  working: "Working", blocked: "Needs you", done: "Done", error: "Error", exited: "Exited", idle: "Idle",
+};
+
+/** Task agents' terminals, collapsed into one tab so they don't crowd your own terminals. */
+function AgentGroup({ project, activeTab }: { project: Project; activeTab: TerminalTab | undefined }) {
+  const statuses = useWorkspace((s) => s.statuses);
+  const menu = useContextMenu();
+  const tabs = project.terminalTabs.filter((t) => t.group === "agents");
+  if (!tabs.length) return null;
+  const st = useWorkspace.getState();
+  const ids = tabs.flatMap((t) => paneIds(t.layout));
+  const status = aggregateStatus(ids, statuses);
+  const finished = tabs.filter((t) => paneIds(t.layout).every((id) => {
+    const pane = project.panes[id];
+    return pane?.exited || ["done", "exited", "error"].includes(statuses[id]?.state ?? "");
+  }));
+  const open = (e: React.MouseEvent) =>
+    menu.open(e, [
+      { header: "Agent terminals" },
+      ...tabs.map((t) => {
+        const s = aggregateStatus(paneIds(t.layout), statuses);
+        return { label: tabTitle(project, t, statuses), hint: s ? STATE_LABEL[s.state] : undefined, checked: t.id === activeTab?.id, action: () => st.setActiveTerminalTab(project.id, t.id) };
+      }),
+      "sep",
+      {
+        label: `Close Finished (${finished.length})`,
+        title: "Close agent terminals whose Claude isn't working",
+        disabled: !finished.length,
+        action: () => finished.forEach((t) => st.closeTerminalTab(project.id, t.id)),
+      },
+      { label: "Close All Agent Terminals", action: async () => { for (const t of tabs) await closeTerminalTabConfirm(project.id, t.id); } },
+    ], { anchor: "below-start", minWidth: 240 });
+
+  return (
+    <>
+      <button
+        className={`term-tab term-group${activeTab?.group === "agents" ? " open" : ""}${status?.state === "blocked" ? " attn" : ""}`}
+        title="Terminals of task agents working in the background"
+        aria-label={`Agent terminals (${tabs.length})`}
+        onClick={open}
+        onContextMenu={open}
+      >
+        <StatusDot status={status} />
+        <ClaudeMark size={11} />
+        <span className="term-tab-title">Agents</span>
+        <span className="term-tab-count">{tabs.length}</span>
+        <Icon name="chevronDown" size={12} />
+      </button>
+      {menu.element}
+    </>
+  );
+}
+
 function TermTab({ project, tab, active }: { project: Project; tab: TerminalTab; active: boolean }) {
   const statuses = useWorkspace((s) => s.statuses);
   const menu = useContextMenu();
   const st = useWorkspace.getState();
   const ids = paneIds(tab.layout);
   const panes = ids.map((id) => project.panes[id]).filter(Boolean);
-  const first = panes[0];
   const status = aggregateStatus(ids, statuses);
-  const firstStatus = first ? statuses[first.id] : undefined;
-  const title = (firstStatus?.title || first?.title || "terminal").replace(/^[✳✻✽✶✢·*]\s+/, "");
+  const title = tabTitle(project, tab, statuses);
   const claude = panes.some((p) => p.isClaude);
   const progress = status?.state === "working" && status.progress != null ? status.progress : null;
   const msg = status && (status.state === "blocked" || status.state === "error") ? status.msg || status.kind : null;

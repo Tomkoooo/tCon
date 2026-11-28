@@ -47,7 +47,12 @@ export type LayoutNode =
   | { type: "split"; id: string; direction: "row" | "column"; children: LayoutNode[]; sizes: number[] };
 
 /** A tab in the terminal panel; holds one or more split terminals. */
-export interface TerminalTab { id: string; layout: LayoutNode }
+export interface TerminalTab {
+  id: string;
+  layout: LayoutNode;
+  /** "agents": a task agent's terminal, shown collapsed under the Agents group in the tab bar */
+  group?: "agents";
+}
 
 export interface EditorTab {
   id: string;

@@ -43,6 +43,10 @@ export interface AddTerminalOpts {
   title?: string;
   env?: Record<string, string>;
   ephemeral?: boolean;
+  /** open as a new tab without switching to it, focusing it or showing a hidden panel */
+  background?: boolean;
+  /** tab group (task agents' terminals are grouped under "agents") */
+  group?: TerminalTab["group"];
 }
 
 type ProjectPatch = Partial<Pick<Project, "name" | "color" | "profileId" | "accountLabel" | "env" | "claudeModel" | "browserUrl" | "sidebarOpen" | "sidebarTab" | "sidebarWidth">>;
@@ -391,7 +395,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
 
     // ---------------- terminals ----------------
 
-    addTerminal(projectId, { claude, split, command, title, env, ephemeral }) {
+    addTerminal(projectId, { claude, split, command, title, env, ephemeral, background, group }) {
       const project = get().projects[projectId];
       if (!project) return "";
       const focused = project.focusedPaneId ? project.panes[project.focusedPaneId] : undefined;
@@ -404,13 +408,18 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         const activeIdx = p.terminalTabs.findIndex((t) => t.id === p.activeTerminalTabId);
         let tabs: TerminalTab[];
         let activeTerminalTabId: string;
+        if (background && p.terminalTabs.length) {
+          // Behind the scenes: append the tab, keep what the user is looking at.
+          const tab: TerminalTab = { id: uid(), layout: { type: "terminal", paneId: pane.id }, ...(group ? { group } : {}) };
+          return { ...p, panes: { ...p.panes, [pane.id]: pane }, terminalTabs: [...p.terminalTabs, tab] };
+        }
         if (split && activeIdx >= 0) {
           const tab = p.terminalTabs[activeIdx];
           const target = p.focusedPaneId && paneIds(tab.layout).includes(p.focusedPaneId) ? p.focusedPaneId : null;
           tabs = p.terminalTabs.map((t, i) => (i === activeIdx ? { ...t, layout: insertPane(t.layout, target, pane.id, split) } : t));
           activeTerminalTabId = tab.id;
         } else {
-          const tab: TerminalTab = { id: uid(), layout: { type: "terminal", paneId: pane.id } };
+          const tab: TerminalTab = { id: uid(), layout: { type: "terminal", paneId: pane.id }, ...(group ? { group } : {}) };
           tabs = [...p.terminalTabs];
           tabs.splice(activeIdx + 1, 0, tab);
           activeTerminalTabId = tab.id;

@@ -3,13 +3,14 @@
 // groups, and Stop / Resume.
 import { useMemo, useState } from "react";
 import {
-  canQueue, enqueue, queuePreview, reorderQueue, resumeQueue, startNextOnly, stopAfterCurrent, stopAgent, stopAllNow, livePane,
+  CLOSE_AGENT_TERMINALS_SETTING, canQueue, enqueue, queuePreview, reorderQueue, resumeQueue, startNextOnly, stopAfterCurrent, stopAgent, stopAllNow, livePane,
 } from "../../tasks/agent";
 import { useTasks } from "../../tasks/store";
 import type { AutoPickup, BoardSettings, BoardState, PickupPosition } from "../../tasks/types";
 import { Icon } from "../icons";
 import { CommitInput, Segmented, Select, Toggle } from "../ui";
 import { PriorityIcon } from "./parts";
+import { useSetting } from "../settingsKit";
 
 const QUEUE_DRAG = "text/tcon-queue";
 
@@ -49,6 +50,7 @@ export function QueueControl({ root, state }: { root: string; state: BoardState 
 export function RunQueuePanel({ root, state, onClose }: { root: string; state: BoardState; onClose(): void }) {
   const s = state.board.settings;
   const save = (patch: Partial<BoardSettings>) => void useTasks.getState().saveSettings(root, patch);
+  const [closeTerms, setCloseTerms] = useSetting<boolean>(CLOSE_AGENT_TERMINALS_SETTING, true);
   const preview = useMemo(() => queuePreview(state), [state]);
   const byId = useMemo(() => new Map(state.tasks.map((t) => [t.id, t])), [state]);
   const { running, queued, paused } = queueCounts(state);
@@ -143,6 +145,8 @@ export function RunQueuePanel({ root, state, onClose }: { root: string; state: B
         />
         <span className="tkq-label" title="When an agent hits a Claude usage limit (5-hour or weekly), switch to the next account that isn't limited and continue there. Settings → Accounts can turn this on for all sessions.">Switch accounts on usage limit</span>
         <Toggle checked={s.autoSwitchAccount} onChange={(v) => save({ autoSwitchAccount: v })} />
+        <span className="tkq-label" title="Close an agent's terminal when its task is done (all boards). Open the chat again from the task.">Close finished agent terminals</span>
+        <Toggle checked={closeTerms} onChange={setCloseTerms} />
         <span className="tkq-label" title="Each agent works on its own branch (tcon/T-n) in a separate git worktree">Isolation</span>
         <Segmented<BoardSettings["isolation"]>
           ariaLabel="Isolation"

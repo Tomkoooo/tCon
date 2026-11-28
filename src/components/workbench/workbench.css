@@ -55,6 +55,9 @@ body.resizing, body.resizing * { user-select: none !important; }
 /* Inner tab rows stay neutral: color is reserved for telling projects apart (the project tab bar). */
 .term-tab.active::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--inner-tab-mark); }
 .term-tab-title { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* Task agents' terminals collapse into one "Agents" button (T-28). */
+.term-tab.term-group { font: inherit; font-size: var(--fs-s); background: transparent; border-top: none; border-bottom: none; border-left: none; padding-right: var(--sp-2); }
+.term-tab.term-group.open { color: var(--fg); background: color-mix(in srgb, var(--fg) 5%, transparent); }
 .term-tab-count { display: inline-flex; align-items: center; gap: 2px; font-size: var(--fs-xs); color: var(--fg-dim); }
 .term-tab-close, .ed-tab-close {
   flex: none; width: 20px; height: 20px; border: none; background: none; border-radius: var(--radius); cursor: pointer;
