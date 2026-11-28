@@ -50,6 +50,7 @@ const P = {
   server: <><rect x="2.5" y="2.5" width="11" height="4.5" rx="1" /><rect x="2.5" y="9" width="11" height="4.5" rx="1" /><path d="M5 4.75h.01M5 11.25h.01" /></>,
   chart: <path d="M2.5 2.5v11h11M5.5 10.5V8M8.5 10.5V5.5M11.5 10.5V7" />,
   book: <path d="M3 3.5a1 1 0 0 1 1-1h8.5v9.5H4a1 1 0 0 0-1 1zM3 12.5a1 1 0 0 0 1 1h8.5" />,
+  folder: <path d="M2 4.5a1 1 0 0 1 1-1h3.25l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z" />,
   mail: <><rect x="2" y="3.5" width="12" height="9" rx="1.5" /><path d="M2.5 4.5L8 9l5.5-4.5" /></>,
 } as const;
 

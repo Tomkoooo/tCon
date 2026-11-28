@@ -123,6 +123,23 @@ textarea.mono, input.mono { font-family: var(--font-mono); font-size: var(--fs-s
   color: var(--fg-dim); font-size: var(--fs-s); border: none; background: none; cursor: pointer; border-radius: var(--radius-l) var(--radius-l) 0 0;
 }
 .tab-section:hover { background: var(--bg-3); color: var(--fg); }
+/* bookmark folders (ProjectFolders.tsx) */
+.tab-folder {
+  display: flex; align-items: center; gap: var(--sp-1); padding: 0 var(--sp-2); margin-top: var(--sp-1);
+  max-width: 180px; flex: none; white-space: nowrap;
+  color: var(--fg-dim); font-size: var(--fs-s); border: none; background: none; cursor: pointer; border-radius: var(--radius-l) var(--radius-l) 0 0;
+}
+.tab-folder:hover, .tab-folder.drag-over { background: var(--bg-3); color: var(--fg); }
+.tab-folder.drag-over { outline: 1px dashed var(--accent); }
+.tab-folder.editing { cursor: default; }
+.folder-item { gap: var(--sp-2); }
+.folder-item .ctx-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.folder-dot { width: 8px; height: 8px; border-radius: 50%; border: 1px solid; flex: none; }
+.folder-remove {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; padding: 0;
+  border: none; background: none; border-radius: var(--radius); color: inherit; opacity: .6; cursor: pointer;
+}
+.folder-remove:hover { opacity: 1; background: color-mix(in srgb, currentColor 15%, transparent); }
 .tabbar-actions { display: flex; align-items: center; gap: var(--sp-1); padding: 0 var(--sp-2); }
 .icon-btn {
   flex: none; border: none; background: none; cursor: pointer; border-radius: var(--radius);
