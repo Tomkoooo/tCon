@@ -1,7 +1,6 @@
 // Bookmark folders in the tab bar: named groups of project paths (e.g. "SIRONIC"). Clicking a
 // folder opens a dropdown of its projects; picking one brings it to the first tab (opening it
 // first if it isn't open). Folders live in settings.json under `projects.folders`.
-import { useState } from "react";
 import { create } from "zustand";
 import { useTheming } from "../theming/store";
 import { PALETTE, useWorkspace } from "../store/workspace";
@@ -114,7 +113,6 @@ function FolderButton({ folder }: { folder: ProjectFolder }) {
   const setRenaming = useFolderUi((s) => s.setRenaming);
   const projects = useWorkspace((s) => s.projects);
   const activeId = useWorkspace((s) => s.activeProjectId);
-  const [dragOver, setDragOver] = useState(false);
 
   const active = activeId ? projects[activeId] : undefined;
   const activePath = active ? trim(active.rootPath) : null;
@@ -189,7 +187,7 @@ function FolderButton({ folder }: { folder: ProjectFolder }) {
   return (
     <>
       <button
-        className={`tab-folder${dragOver ? " drag-over" : ""}`}
+        className="tab-folder"
         title={`${folder.name}: ${folder.paths.length} project${folder.paths.length === 1 ? "" : "s"}`}
         onClick={(e) => menu.open(e, rows(), { anchor: "below-start", minWidth: 220 })}
         onContextMenu={(e) =>
@@ -199,18 +197,9 @@ function FolderButton({ folder }: { folder: ProjectFolder }) {
           ])
         }
         onDoubleClick={() => setRenaming(folder.id)}
-        onDragOver={(e) => {
-          if (e.dataTransfer.types.includes("text/tcon-project")) {
-            e.preventDefault();
-            setDragOver(true);
-          }
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => {
-          setDragOver(false);
-          const p = useWorkspace.getState().projects[e.dataTransfer.getData("text/tcon-project")];
-          if (p) addToFolder(folder.id, p.rootPath);
-        }}
+        // Project tabs are dropped here with the pointer drag in TabBar (tabDrag.ts).
+        data-drop-kind="project"
+        data-folder={folder.id}
       >
         <Icon name="folder" size={14} />
         <span className="tab-name">{folder.name}</span>

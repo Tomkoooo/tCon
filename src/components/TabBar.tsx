@@ -7,8 +7,8 @@ import { useContextMenu } from "./ContextMenu";
 import { AccountChip } from "./AccountChip";
 import { confirmProjectEditors } from "./editor/editorActions";
 import { Icon } from "./icons";
-import { insertIndex, startTabDrag } from "./workbench/tabDrag";
-import { FolderButtons, folderMenuItems } from "./ProjectFolders";
+import { halfOf, insertIndex, startTabDrag } from "./workbench/tabDrag";
+import { addToFolder, FolderButtons, folderMenuItems } from "./ProjectFolders";
 
 function useNow(intervalMs: number) {
   const [now, setNow] = useState(Date.now());
@@ -133,7 +133,9 @@ function Tab({ project }: { project: Project }) {
           if (editing) return;
           startTabDrag(e, {
             kind: "project",
+            zone: (target, ev) => (target.dataset.folder ? "into" : halfOf(target, ev)),
             drop: (target, zone) => {
+              if (target.dataset.folder) return addToFolder(target.dataset.folder, project.rootPath);
               const order = useWorkspace.getState().order;
               const to = order.indexOf(target.dataset.id ?? "");
               if (to >= 0) st.moveProject(project.id, insertIndex(order.indexOf(project.id), to, zone === "after"));

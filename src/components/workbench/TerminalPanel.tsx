@@ -1,5 +1,5 @@
 import { ask } from "@tauri-apps/plugin-dialog";
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { aggregateStatus, hasEditors, useWorkspace } from "../../store/workspace";
 import { paneIds } from "../../store/layout";
 import type { LayoutNode, Project, TerminalTab } from "../../types";
@@ -9,8 +9,9 @@ import { StatusDot } from "../StatusDot";
 import { useContextMenu, type MenuItem } from "../ContextMenu";
 import { layoutMenuItems } from "./layoutMenu";
 import { ClaudeMark, Icon } from "../icons";
+import { insertIndex, startTabDrag } from "./tabDrag";
 
-const DRAG_TYPE = "text/tcon-term-tab";
+const DRAG_KIND = "term-tab";
 
 export async function closeTerminalTabConfirm(projectId: string, tabId: string) {
   const st = useWorkspace.getState();
@@ -76,8 +77,8 @@ export function TerminalPanel({ project }: { project: Project }) {
     <div className="panel">
       <div className="panel-header">
         <div className="panel-tabs">
-          {project.terminalTabs.map((tab, i) => (
-            <TermTab key={tab.id} project={project} tab={tab} index={i} active={tab.id === activeTab?.id} />
+          {project.terminalTabs.map((tab) => (
+            <TermTab key={tab.id} project={project} tab={tab} active={tab.id === activeTab?.id} />
           ))}
           <button className="icon-btn panel-new" title="New terminal (⇧⌘T)" aria-label="New terminal" onClick={() => st.addTerminal(project.id, { claude: false })}>
             <Icon name="plus" />
@@ -126,10 +127,9 @@ export function TerminalPanel({ project }: { project: Project }) {
   );
 }
 
-function TermTab({ project, tab, index, active }: { project: Project; tab: TerminalTab; index: number; active: boolean }) {
+function TermTab({ project, tab, active }: { project: Project; tab: TerminalTab; active: boolean }) {
   const statuses = useWorkspace((s) => s.statuses);
   const menu = useContextMenu();
-  const [dragOver, setDragOver] = useState(false);
   const st = useWorkspace.getState();
   const ids = paneIds(tab.layout);
   const panes = ids.map((id) => project.panes[id]).filter(Boolean);
@@ -158,23 +158,22 @@ function TermTab({ project, tab, index, active }: { project: Project; tab: Termi
   return (
     <>
     <div
-      className={`term-tab${active ? " active" : ""}${dragOver ? " drop" : ""}${status?.state === "blocked" ? " attn" : ""}`}
+      className={`term-tab${active ? " active" : ""}${status?.state === "blocked" ? " attn" : ""}`}
       style={{ ["--pane-accent" as string]: project.color }}
       title={[panes.map((p) => `${p.title} — ${p.cwd}`).join("\n"), msg].filter(Boolean).join("\n")}
-      draggable
-      onDragStart={(e) => e.dataTransfer.setData(DRAG_TYPE, tab.id)}
-      onDragOver={(e) => {
-        if (e.dataTransfer.types.includes(DRAG_TYPE)) {
-          e.preventDefault();
-          setDragOver(true);
-        }
-      }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => {
-        setDragOver(false);
-        const id = e.dataTransfer.getData(DRAG_TYPE);
-        if (id && id !== tab.id) st.moveTerminalTab(project.id, id, index);
-      }}
+      data-drop-kind={DRAG_KIND}
+      data-id={tab.id}
+      onPointerDown={(e) =>
+        startTabDrag(e, {
+          kind: DRAG_KIND,
+          drop: (target, zone) => {
+            const tabs = useWorkspace.getState().projects[project.id]?.terminalTabs ?? [];
+            const to = tabs.findIndex((t) => t.id === target.dataset.id);
+            const from = tabs.findIndex((t) => t.id === tab.id);
+            if (to >= 0) st.moveTerminalTab(project.id, tab.id, insertIndex(from, to, zone === "after"));
+          },
+        })
+      }
       onMouseDown={(e) => e.button === 0 && st.setActiveTerminalTab(project.id, tab.id)}
       onAuxClick={(e) => e.button === 1 && void closeTerminalTabConfirm(project.id, tab.id)}
       onContextMenu={onContextMenu}

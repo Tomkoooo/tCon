@@ -13,6 +13,7 @@ Each release's section becomes its GitHub release notes.
 - **Bookmark folders** in the tab bar: group projects under a name such as "SIRONIC". Click a folder to see its projects; picking one brings it to the first tab, opening it first if it isn't open. Add a project from its tab's right-click menu (**Add to "…"** / **Add to New Folder…**), by dropping its tab onto a folder, or with **Add "…"** in the folder's dropdown. Right-click or double-click a folder to rename or delete it. Folders are saved in `settings.json` under `projects.folders`.
 
 ### Fixed
+- Drag and drop works again in the tab bars: drag a project tab, a terminal tab or an editor tab to reorder it (a line shows where it will land, Esc cancels). Editor tabs can still be dragged into another group or to the right edge of a group to split, and project tabs onto a bookmark folder.
 - Task agents and planners with a long prompt (long task titles, several tasks at once) no longer get stuck at the shell's `quote>` prompt without starting Claude. Long startup commands are now handed to the shell through a short-lived private script instead of being typed in, which the macOS terminal cut off after 1024 bytes.
 
 ## [0.2.0-alpha.1] - 2026-11-27
