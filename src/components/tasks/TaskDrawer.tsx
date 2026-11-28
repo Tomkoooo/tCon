@@ -2,7 +2,7 @@
 // plan, progress log and verification, and run the agent actions.
 import { useEffect, useRef, useState } from "react";
 import { useTasks } from "../../tasks/store";
-import { livePane, openAgentTerminal, planTasks, projectForRoot, startAgent, stopAgent } from "../../tasks/agent";
+import { canQueue, enqueue, hasAgentChat, livePane, openAgentChat, queueActive, planTasks, projectForRoot, startAgent, stopAgent } from "../../tasks/agent";
 import { mergeTaskBranch, openTaskPr, removeTaskWorktree } from "../../tasks/worktree";
 import { PRIORITIES, type BoardState, type Task } from "../../tasks/types";
 import { useWorkspace } from "../../store/workspace";
@@ -85,6 +85,7 @@ export function TaskDrawer({ root, task, state, onClose }: { root: string; task:
   const ref = useRef<HTMLDivElement>(null);
   const view = useAgentView(task);
   const alive = useWorkspace(() => !!livePane(task));
+  const chat = alive || hasAgentChat(task);
 
   // Follow external edits (Claude, another view) unless the user is editing that field.
   useEffect(() => {
@@ -262,15 +263,26 @@ export function TaskDrawer({ root, task, state, onClose }: { root: string; task:
                 {task.agent === "interrupted" || task.agent === "limited" ? "Resume agent" : task.agent === "done" || task.agent === "failed" ? "Run Claude again" : "Start Claude"}
               </button>
             )}
+            {!running && canQueue(task) && queueActive(state) && (
+              <button className="btn small" disabled={!project} title="Start it when the run queue gets to it" onClick={() => void enqueue(root, [task.id])}>
+                <Icon name="queue" size={14} />
+                Add to queue
+              </button>
+            )}
             {!running && !queued && task.status !== "done" && (
               <button className="btn small" disabled={!project} title="Write a plan and move the task to Todo, without changing code" onClick={() => void planTasks(root, [task.id])}>
                 <Icon name="notes" size={14} />
                 Plan with Claude
               </button>
             )}
-            <button className="btn small" disabled={!alive} title={alive ? undefined : "No agent terminal is open"} onClick={() => openAgentTerminal(root, task.id)}>
+            <button
+              className="btn small"
+              disabled={!chat}
+              title={alive ? "Show the agent's terminal" : chat ? "Open the Claude session that worked on this task (claude --resume)" : "No agent chat for this task yet"}
+              onClick={() => openAgentChat(root, task.id)}
+            >
               <Icon name="terminal" size={14} />
-              Agent terminal
+              {alive ? "Agent terminal" : "Open chat"}
             </button>
             <span className="sb-spacer" />
             <button className="btn small ghost danger" onClick={() => void confirmDelete(root, task)}>Delete</button>

@@ -15,11 +15,14 @@ import { AccountAvatar, accountOrg } from "./AccountChip";
 import { AppearanceSection, KeybindingsSection, TerminalSection, openConfigInEditor } from "./AppearanceSettings";
 import { SecuritySection } from "./SecuritySettings";
 import { BackgroundSection } from "./BackgroundSettings";
-import { SettingRow, SettingsGroup, SettingsSearch, SettingsSection } from "./settingsKit";
+import { SettingRow, SettingsGroup, SettingsSearch, SettingsSection, useSetting } from "./settingsKit";
+import { usageText } from "../accountRotation";
+import { AUTO_SWITCH_SETTING } from "../autoSwitch";
+import { CLOSE_AGENT_TERMINALS_SETTING } from "../tasks/agent";
 import { BrowserSection } from "./browser/BrowserSettings";
 import { UpdatesSection } from "./UpdateSettings";
 import { NotificationsSection } from "./NotificationSettings";
-import { Badge, CommitInput, Segmented } from "./ui";
+import { Badge, CommitInput, Segmented, Toggle } from "./ui";
 import { Icon } from "./icons";
 
 const SECTIONS = [
@@ -156,7 +159,30 @@ function AccountsSection() {
           <p className="hint">Running sessions keep their account. After a switch, tCon offers to restart idle ones on the new account.</p>
         </div>
       </SettingRow>
+      <AutoSwitchRow />
     </SettingsSection>
+  );
+}
+
+function AutoSwitchRow() {
+  const [mode, setMode] = useSetting<string>(AUTO_SWITCH_SETTING, "off");
+  return (
+    <SettingRow
+      label="Switch accounts on usage limit"
+      settingKey={AUTO_SWITCH_SETTING}
+      keywords="auto switch rotate usage limit weekly 5-hour reset quota"
+      description="When a Claude session hits its 5-hour or weekly limit, switch to the next account that isn't limited and continue there. If every account is limited, tCon stops and switches to the first one that resets. A board's run queue can turn this on for its own agents only."
+    >
+      <Segmented<string>
+        ariaLabel="Switch accounts on usage limit"
+        value={mode === "everywhere" ? "everywhere" : "off"}
+        onChange={setMode}
+        options={[
+          { value: "off", label: "Off", title: "Only boards that opt in switch accounts" },
+          { value: "everywhere", label: "All sessions" },
+        ]}
+      />
+    </SettingRow>
   );
 }
 
@@ -164,6 +190,7 @@ function AccountCard({ account, hasProject }: { account: Account; hasProject: bo
   const st = useAccounts((s) => s.status[account.id]);
   const activeId = useAccounts((s) => s.activeId);
   const loggingIn = useAccounts((s) => Object.values(s.logins).includes(account.id));
+  const use = usageText(useAccounts((s) => s.limits[account.id]), useAccounts((s) => s.usage[account.id]));
   const acc = useAccounts.getState;
   const active = account.id === activeId;
   const loggedIn = !!st?.loggedIn;
@@ -192,6 +219,7 @@ function AccountCard({ account, hasProject }: { account: Account; hasProject: bo
           <span>·</span>
           <code title={account.configDir ?? "~/.claude"}>{dir}</code>
         </div>
+        {use && <div className={`account-card-usage${use.limited ? " limited" : ""}`} title={use.long}>{use.limited ? use.short : use.long}</div>}
         {error && <div className="settings-error">{error}</div>}
       </div>
       <div className="account-card-actions">
@@ -263,6 +291,20 @@ export function ModelPicker({ value, onChange }: { value: string; onChange(v: st
   );
 }
 
+function CloseAgentTerminalsRow() {
+  const [on, setOn] = useSetting<boolean>(CLOSE_AGENT_TERMINALS_SETTING, true);
+  return (
+    <SettingRow
+      label="Close finished agent terminals"
+      settingKey={CLOSE_AGENT_TERMINALS_SETTING}
+      keywords="task agent terminal close auto group background"
+      description="Task agents' terminals open in the background under Agents. Close each one when its task is done; reopen the chat from the task."
+    >
+      <Toggle checked={on} onChange={setOn} />
+    </SettingRow>
+  );
+}
+
 function ClaudeSection() {
   const raw = useTheming((s) => s.settings[MODEL_SETTING]);
   const setSetting = useTheming((s) => s.setSetting);
@@ -283,6 +325,7 @@ function ClaudeSection() {
       >
         <ModelPicker value={normalizeModel(raw)} onChange={(v) => void setSetting(MODEL_SETTING, v)} />
       </SettingRow>
+      <CloseAgentTerminalsRow />
     </SettingsSection>
   );
 }

@@ -1,6 +1,9 @@
 //! Spots Claude Code's usage-limit message in a terminal's output ("Claude usage limit
 //! reached", "5-hour limit reached ∙ resets 3pm", the older "…|1735689600" form) so tCon can
-//! pause the task queue and resume the agent after the reset.
+//! pause the task queue and resume the agent after the reset. It also picks up the usage
+//! warnings Claude Code prints before that ("You've used 90% of your weekly limit ∙ resets…",
+//! "Approaching usage limit"), which is the only usage figure tCon sees: reading the account's
+//! OAuth token to ask the API would mean touching Claude's credentials (see SECURITY.md).
 use chrono::{DateTime, Local, NaiveTime, TimeZone};
 use serde::Serialize;
 
@@ -15,37 +18,86 @@ pub struct LimitHit {
     pub reset_at: Option<i64>,
 }
 
+/// A usage warning before the limit: "You've used 90% of your weekly limit ∙ resets Oct 9 at 1pm".
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageNote {
+    pub message: String,
+    /// Percent of the limit used, when the message says ("Approaching usage limit" doesn't).
+    pub percent: Option<u8>,
+    pub reset_at: Option<i64>,
+}
+
+/// What one chunk of output revealed.
+#[derive(Default, Debug)]
+pub struct Scan {
+    pub hit: Option<LimitHit>,
+    pub usage: Option<UsageNote>,
+}
+
 const TAIL: usize = 400;
 const MIN_GAP_SECS: i64 = 120;
+/// The TUI redraws the same warning often; repeat an unchanged one only this rarely.
+const USAGE_REPEAT_SECS: i64 = 600;
 
 #[derive(Default)]
 pub struct LimitScanner {
     tail: String,
     last_hit: Option<i64>,
+    last_usage: Option<(String, i64)>,
 }
 
 impl LimitScanner {
-    /// Returns a hit at most once per couple of minutes per terminal.
-    pub fn feed(&mut self, chunk: &[u8]) -> Option<LimitHit> {
+    /// Returns a hit at most once per couple of minutes per terminal, and a usage warning
+    /// when it's new or changed.
+    pub fn feed(&mut self, chunk: &[u8]) -> Scan {
         let text = String::from_utf8_lossy(chunk);
         let mut buf = std::mem::take(&mut self.tail);
         buf.push_str(&text);
         // Cheap pre-check (the tail is short), also catching a word split across reads.
         let relevant = buf.to_ascii_lowercase().contains("limit");
-        let hit = if relevant { detect(&strip_ansi(&buf), Local::now()) } else { None };
+        let now_dt = Local::now();
+        let plain = if relevant { strip_ansi(&buf) } else { String::new() };
+        let hit = if relevant { detect(&plain, now_dt) } else { None };
+        let usage = if relevant && hit.is_none() { detect_usage(&plain, now_dt) } else { None };
         // Keep the end for messages split across reads.
         let cut = buf.len().saturating_sub(TAIL);
         let cut = (cut..buf.len()).find(|&i| buf.is_char_boundary(i)).unwrap_or(buf.len());
         self.tail = buf[cut..].to_string();
-        let hit = hit?;
-        let now = Local::now().timestamp();
+        let now = now_dt.timestamp();
+        let mut scan = Scan::default();
+        if let Some(u) = usage {
+            let repeat = self.last_usage.as_ref().is_some_and(|(m, t)| *m == u.message && now - t < USAGE_REPEAT_SECS);
+            if !repeat {
+                self.last_usage = Some((u.message.clone(), now));
+                scan.usage = Some(u);
+            }
+        }
+        let Some(hit) = hit else { return scan };
         if self.last_hit.is_some_and(|t| now - t < MIN_GAP_SECS) {
-            return None;
+            return scan;
         }
         self.last_hit = Some(now);
         self.tail.clear();
-        Some(hit)
+        scan.hit = Some(hit);
+        scan
     }
+}
+
+/// Find a usage warning ("used 85% of your 5-hour limit", "Approaching usage limit") in plain text.
+pub fn detect_usage(text: &str, now: DateTime<Local>) -> Option<UsageNote> {
+    let line = text.lines().rev().find(|l| {
+        let l = l.to_ascii_lowercase();
+        l.contains("limit")
+            && (l.contains("% of your") || l.contains("approaching"))
+            && ["usage", "hour", "weekly", "session", "opus", "sonnet"].iter().any(|w| l.contains(w))
+    })?;
+    let message = line.trim().trim_start_matches(['⎿', '•', '∙', '│', ' ']).trim().to_string();
+    let percent = message.find('%').and_then(|i| {
+        let digits: String = message[..i].chars().rev().take_while(|c| c.is_ascii_digit()).collect::<Vec<_>>().into_iter().rev().collect();
+        digits.parse::<u32>().ok().filter(|p| *p <= 100).map(|p| p as u8)
+    });
+    Some(UsageNote { reset_at: reset_time(&message, now), percent, message })
 }
 
 /// Find a usage-limit message in plain text.
@@ -76,6 +128,9 @@ pub fn reset_time(msg: &str, now: DateTime<Local>) -> Option<i64> {
             continue;
         }
         if let Some(t) = parse_clock(tok, after) {
+            if let Some(date) = month_day(after, now) {
+                return Local.from_local_datetime(&date.and_time(t)).single().map(|w| w.timestamp());
+            }
             let today = now.date_naive().and_time(t);
             let mut when = Local.from_local_datetime(&today).single()?;
             if when <= now {
@@ -83,6 +138,23 @@ pub fn reset_time(msg: &str, now: DateTime<Local>) -> Option<i64> {
             }
             return Some(when.timestamp());
         }
+    }
+    None
+}
+
+/// "resets oct 9 at 1pm" → Oct 9 of this year (next year if that's already past).
+fn month_day(after: &str, now: DateTime<Local>) -> Option<chrono::NaiveDate> {
+    const MONTHS: [&str; 12] = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+    let toks: Vec<&str> = after.split(|c: char| c.is_whitespace() || c == ',').filter(|t| !t.is_empty()).collect();
+    for w in toks.windows(2) {
+        let Some(m) = MONTHS.iter().position(|m| w[0].starts_with(m)) else { continue };
+        let Ok(d) = w[1].trim_end_matches(|c: char| !c.is_ascii_digit()).parse::<u32>() else { continue };
+        use chrono::Datelike;
+        let mut date = chrono::NaiveDate::from_ymd_opt(now.year(), m as u32 + 1, d)?;
+        if date < now.date_naive() {
+            date = chrono::NaiveDate::from_ymd_opt(now.year() + 1, m as u32 + 1, d)?;
+        }
+        return Some(date);
     }
     None
 }
@@ -127,6 +199,9 @@ mod tests {
         assert_eq!(h.reset_at, Some(at(15, 0).timestamp()));
         let h = detect("Claude usage limit reached. Your limit will reset at 3:30 PM.", now).unwrap();
         assert_eq!(h.reset_at, Some(at(15, 30).timestamp()));
+        let h = detect("Weekly limit reached ∙ resets Dec 1 at 1pm", now).unwrap();
+        let dec1 = Local.from_local_datetime(&chrono::NaiveDate::from_ymd_opt(2026, 12, 1).unwrap().and_hms_opt(13, 0, 0).unwrap()).single().unwrap();
+        assert_eq!(h.reset_at, Some(dec1.timestamp()));
         let h = detect("Claude AI usage limit reached|1735689600", now).unwrap();
         assert_eq!(h.reset_at, Some(1735689600));
         // Earlier today → tomorrow.
@@ -138,8 +213,32 @@ mod tests {
     #[test]
     fn scanner_joins_split_chunks_and_throttles() {
         let mut s = LimitScanner::default();
-        assert!(s.feed(b"\x1b[31mClaude usage li").is_none());
-        assert!(s.feed(b"mit reached, resets 3pm\r\n").is_some());
-        assert!(s.feed(b"Claude usage limit reached, resets 3pm\r\n").is_none());
+        assert!(s.feed(b"\x1b[31mClaude usage li").hit.is_none());
+        assert!(s.feed(b"mit reached, resets 3pm\r\n").hit.is_some());
+        assert!(s.feed(b"Claude usage limit reached, resets 3pm\r\n").hit.is_none());
+    }
+
+    #[test]
+    fn detects_usage_warnings() {
+        let now = at(13, 0);
+        let u = detect_usage("  ⎿ You've used 85% of your 5-hour limit ∙ resets 3pm\n", now).unwrap();
+        assert_eq!(u.percent, Some(85));
+        assert_eq!(u.reset_at, Some(at(15, 0).timestamp()));
+        let u = detect_usage("Approaching usage limit · resets at 10pm", now).unwrap();
+        assert_eq!(u.percent, None);
+        assert_eq!(u.reset_at, Some(at(22, 0).timestamp()));
+        let u = detect_usage("You've used 92% of your weekly limit · resets Dec 1 at 1pm", now).unwrap();
+        let dec1 = Local.from_local_datetime(&chrono::NaiveDate::from_ymd_opt(2026, 12, 1).unwrap().and_hms_opt(13, 0, 0).unwrap()).single().unwrap();
+        assert_eq!(u.reset_at, Some(dec1.timestamp()));
+        assert!(detect_usage("memory usage at 85% of the container limit", now).is_none());
+        assert!(detect_usage("we hit 50% coverage", now).is_none());
+    }
+
+    #[test]
+    fn scanner_reports_changed_usage_once() {
+        let mut s = LimitScanner::default();
+        assert_eq!(s.feed(b"You've used 80% of your weekly limit\r\n").usage.and_then(|u| u.percent), Some(80));
+        assert!(s.feed(b"redraw\r\n").usage.is_none());
+        assert_eq!(s.feed(b"You've used 90% of your weekly limit\r\n").usage.and_then(|u| u.percent), Some(90));
     }
 }

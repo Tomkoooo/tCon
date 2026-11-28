@@ -7,6 +7,8 @@ import { useContextMenu } from "./ContextMenu";
 import { AccountChip } from "./AccountChip";
 import { confirmProjectEditors } from "./editor/editorActions";
 import { Icon } from "./icons";
+import { halfOf, insertIndex, startTabDrag } from "./workbench/tabDrag";
+import { addToFolder, FolderButtons, folderMenuItems } from "./ProjectFolders";
 
 function useNow(intervalMs: number) {
   const [now, setNow] = useState(Date.now());
@@ -40,15 +42,16 @@ export function TabBar() {
   return (
     <div className="tabbar" data-tauri-drag-region>
       <div className="tabbar-scroll" data-tauri-drag-region>
+        <FolderButtons />
         {active.map((id) => (
-          <Tab key={id} project={projects[id]} index={order.indexOf(id)} />
+          <Tab key={id} project={projects[id]} />
         ))}
         {inactive.length > 0 && (
           <button className="tab-section" onClick={() => setShowInactive(!showInactive)} title="Projects idle for 30 minutes or more">
             <Icon name={showInactive ? "chevronDown" : "chevronRight"} size={12} /> Inactive {inactive.length}
           </button>
         )}
-        {showInactive && inactive.map((id) => <Tab key={id} project={projects[id]} index={order.indexOf(id)} />)}
+        {showInactive && inactive.map((id) => <Tab key={id} project={projects[id]} />)}
         <button className="icon-btn" title="Open project (⌘T)" aria-label="Open project" onClick={() => setModal({ kind: "newProject" })}>
           <Icon name="plus" />
         </button>
@@ -62,7 +65,7 @@ export function TabBar() {
   );
 }
 
-function Tab({ project, index }: { project: Project; index: number }) {
+function Tab({ project }: { project: Project }) {
   const statuses = useWorkspace((s) => s.statuses);
   const activeProjectId = useWorkspace((s) => s.activeProjectId);
   const git = useWorkspace((s) => s.gitStatus[project.id]);
@@ -70,7 +73,6 @@ function Tab({ project, index }: { project: Project; index: number }) {
   const st = useWorkspace.getState();
   const menu = useContextMenu();
   const [editing, setEditing] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
 
   const status = projectStatus(project, statuses);
   const profile = profiles.find((p) => p.id === project.profileId);
@@ -114,6 +116,8 @@ function Tab({ project, index }: { project: Project; index: number }) {
       { label: "New Terminal", hint: "⇧⌘T", action: () => st.addTerminal(project.id, { claude: false }) },
       { label: project.sidebarOpen ? "Hide Sidebar" : "Show Sidebar", hint: "⌘B", action: () => st.updateProject(project.id, { sidebarOpen: !project.sidebarOpen }) },
       "sep",
+      ...folderMenuItems(project),
+      "sep",
       { label: "Close Project", action: () => void closeWithConfirm(project) },
     ]);
 
@@ -121,21 +125,22 @@ function Tab({ project, index }: { project: Project; index: number }) {
     <>
       <div
         className={`tab${attention > 0 ? " attn" : ""}${project.id === activeProjectId ? " active" : ""}`}
-        style={{ ["--tab-color" as string]: project.color, outline: dragOver ? "1px dashed var(--accent)" : undefined }}
+        style={{ ["--tab-color" as string]: project.color }}
         title={title}
-        draggable={!editing}
-        onDragStart={(e) => e.dataTransfer.setData("text/tcon-project", project.id)}
-        onDragOver={(e) => {
-          if (e.dataTransfer.types.includes("text/tcon-project")) {
-            e.preventDefault();
-            setDragOver(true);
-          }
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => {
-          setDragOver(false);
-          const id = e.dataTransfer.getData("text/tcon-project");
-          if (id && id !== project.id) st.moveProject(id, index);
+        data-drop-kind="project"
+        data-id={project.id}
+        onPointerDown={(e) => {
+          if (editing) return;
+          startTabDrag(e, {
+            kind: "project",
+            zone: (target, ev) => (target.dataset.folder ? "into" : halfOf(target, ev)),
+            drop: (target, zone) => {
+              if (target.dataset.folder) return addToFolder(target.dataset.folder, project.rootPath);
+              const order = useWorkspace.getState().order;
+              const to = order.indexOf(target.dataset.id ?? "");
+              if (to >= 0) st.moveProject(project.id, insertIndex(order.indexOf(project.id), to, zone === "after"));
+            },
+          });
         }}
         onMouseDown={(e) => e.button === 0 && st.setActive(project.id)}
         onDoubleClick={() => setEditing(true)}

@@ -39,6 +39,7 @@ body.resizing, body.resizing * { user-select: none !important; }
   height: 32px; flex: none; display: flex; align-items: stretch; background: var(--panel-header-bg, var(--bg-2));
   border-bottom: 1px solid var(--panel-border, var(--border));
 }
+.panel-tabs, .ed-tabs { --inner-tab-mark: color-mix(in srgb, var(--fg) 70%, transparent); }
 .panel-tabs { flex: 1; min-width: 0; display: flex; align-items: stretch; overflow-x: auto; scrollbar-width: none; }
 .panel-tabs::-webkit-scrollbar { display: none; }
 .panel-actions { flex: none; display: flex; align-items: center; gap: 2px; padding: 0 var(--sp-1); }
@@ -49,11 +50,14 @@ body.resizing, body.resizing * { user-select: none !important; }
   position: relative; flex: none; display: flex; align-items: center; gap: var(--sp-2); padding: 0 var(--sp-1) 0 var(--sp-3); max-width: 240px;
   color: var(--fg-dim); cursor: default; white-space: nowrap; border-right: 1px solid var(--border); font-size: var(--fs-s);
 }
-.term-tab:hover { color: var(--fg); }
-.term-tab.active { color: var(--tab-active-fg, var(--fg)); background: var(--panel-bg, var(--term-bg)); }
-.term-tab.active::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--pane-accent, var(--accent)); }
-.term-tab.drop { box-shadow: inset 2px 0 0 var(--accent); }
+.term-tab:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 5%, transparent); }
+.term-tab.active { color: var(--tab-active-fg, var(--fg)); background: var(--panel-bg, var(--term-bg)); font-weight: 500; }
+/* Inner tab rows stay neutral: color is reserved for telling projects apart (the project tab bar). */
+.term-tab.active::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--inner-tab-mark); }
 .term-tab-title { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* Task agents' terminals collapse into one "Agents" button (T-28). */
+.term-tab.term-group { font: inherit; font-size: var(--fs-s); background: transparent; border-top: none; border-bottom: none; border-left: none; padding-right: var(--sp-2); }
+.term-tab.term-group.open { color: var(--fg); background: color-mix(in srgb, var(--fg) 5%, transparent); }
 .term-tab-count { display: inline-flex; align-items: center; gap: 2px; font-size: var(--fs-xs); color: var(--fg-dim); }
 .term-tab-close, .ed-tab-close {
   flex: none; width: 20px; height: 20px; border: none; background: none; border-radius: var(--radius); cursor: pointer;
@@ -78,12 +82,11 @@ body.resizing, body.resizing * { user-select: none !important; }
   position: relative; flex: none; display: flex; align-items: center; gap: var(--sp-2); padding: 0 var(--sp-1) 0 var(--sp-3); min-width: 0; max-width: 260px;
   color: var(--tab-inactive-fg, var(--fg-dim)); background: var(--tab-inactive-bg, transparent); border-right: 1px solid var(--tab-border, var(--border)); cursor: default; white-space: nowrap; font-size: var(--fs-m);
 }
-.ed-tab:hover { color: var(--fg); }
-.ed-tab.active { background: var(--tab-active-bg, var(--bg)); color: var(--tab-active-fg, var(--fg)); }
+.ed-tab:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 5%, var(--tab-inactive-bg, transparent)); }
+.ed-tab.active { background: var(--tab-active-bg, var(--bg)); color: var(--tab-active-fg, var(--fg)); font-weight: 500; }
 .ed-tab.active::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: var(--tab-active-bg, var(--bg)); }
-.ed-group.active .ed-tab.active::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--pane-accent, var(--accent)); }
+.ed-group.active .ed-tab.active::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--inner-tab-mark); }
 .ed-tab.preview .ed-tab-name { font-style: italic; }
-.ed-tab.drop { box-shadow: inset 2px 0 0 var(--accent); }
 .ed-tab-icon { color: var(--fg-dim); }
 .ed-tab-name { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .ed-tab-desc { color: var(--fg-dim); font-size: var(--fs-xs); }
@@ -98,8 +101,15 @@ body.resizing, body.resizing * { user-select: none !important; }
 
 .ed-group-body { position: relative; flex: 1; min-height: 0; display: flex; }
 .ed-tab-body { flex: 1; min-width: 0; min-height: 0; display: flex; }
-.ed-drop-overlay { position: absolute; top: 0; bottom: 0; right: 0; left: 0; background: color-mix(in srgb, var(--accent) 18%, transparent); pointer-events: none; z-index: 4; }
-.ed-drop-overlay.right { left: 50%; }
+.ed-group-body[data-drop]::after { content: ""; position: absolute; top: 0; bottom: 0; right: 0; left: 0; background: color-mix(in srgb, var(--accent) 18%, transparent); pointer-events: none; z-index: 4; }
+.ed-group-body[data-drop="right"]::after { left: 50%; }
+.ed-tabs[data-drop] .ed-tabs-scroll { box-shadow: inset -2px 0 0 var(--accent); }
+
+/* Tab drag & drop (tabDrag.ts): insertion marker on the hovered tab, dimmed source tab. */
+.tab[data-drop="before"], .term-tab[data-drop="before"], .ed-tab[data-drop="before"] { box-shadow: inset 2px 0 0 var(--accent); }
+.tab[data-drop="after"], .term-tab[data-drop="after"], .ed-tab[data-drop="after"] { box-shadow: inset -2px 0 0 var(--accent); }
+.tab.tab-dragging, .term-tab.tab-dragging, .ed-tab.tab-dragging { opacity: .5; }
+body.tab-drag-active, body.tab-drag-active * { cursor: grabbing !important; user-select: none !important; }
 
 .file-icon { flex: none; display: inline-block; vertical-align: middle; }
 .file-icon-glyph { display: inline-flex; align-items: center; justify-content: center; overflow: visible; font-style: normal; -webkit-font-smoothing: antialiased; }

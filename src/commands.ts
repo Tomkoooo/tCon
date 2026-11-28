@@ -12,6 +12,7 @@ import { useSearchUI } from "./search/Pickers";
 import { openBoard, planInbox, quickAddTask, resumeActiveQueue, resumeAllQueues, showTasksView, stopAllQueues, stopQueueAfterCurrent } from "./tasks/actions";
 import { openDevServer, promptOpenUrl, toggleBrowserView } from "./browser/actions";
 import { checkForUpdates } from "./updater";
+import { pinActivePage } from "./browser/pins";
 
 export interface Keybinding { key: string; command: string; when?: string; args?: unknown }
 
@@ -131,6 +132,7 @@ export const COMMANDS: Command[] = [
   { id: "browser.openUrl", title: "Browser: Open URL…", run: promptOpenUrl },
   { id: "browser.openDevServer", title: "Browser: Open Dev Server", run: () => openDevServer() },
   { id: "browser.showView", title: "Browser: Show Browser View", run: toggleBrowserView },
+  { id: "browser.pinPage", title: "Browser: Pin Page to Sidebar…", run: pinActivePage },
   { id: "tcon.checkForUpdates", title: "Check for Updates…", run: checkForUpdates },
 ];
 

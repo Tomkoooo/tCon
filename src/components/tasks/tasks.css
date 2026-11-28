@@ -166,6 +166,9 @@
 .tkq-id { color: var(--fg-dim); font-variant-numeric: tabular-nums; }
 .tkq-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tkq-why { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-dim); font-size: var(--fs-xs); }
+.tkq-add { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border-top: 1px solid var(--border); color: var(--fg-dim); }
+.tkq-add .ui-select { flex: 1; min-width: 0; }
+.tkq-add select { width: 100%; }
 .tkq-foot { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border-top: 1px solid var(--border); flex-wrap: wrap; }
 .tkq-confirm { display: inline-flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-s); }
 

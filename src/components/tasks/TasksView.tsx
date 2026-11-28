@@ -2,7 +2,7 @@
 // with drag & drop. Built for jotting things down fast during a meeting.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useBoard, useTasks } from "../../tasks/store";
-import { installSkill, openAgentTerminal, planTasks, projectForRoot, resumeAgent, resumeQueue, startAgent, stopAfterCurrent, stopAgent, livePane } from "../../tasks/agent";
+import { canQueue, enqueue, hasAgentChat, installSkill, openAgentChat, queueActive, planTasks, projectForRoot, resumeAgent, resumeQueue, startAgent, stopAfterCurrent, stopAgent, livePane } from "../../tasks/agent";
 import { openBoard, quickAddTask } from "../../tasks/actions";
 import { DEFAULT_SETTINGS, PRIORITIES, type AutoPickup, type BoardState, type Task } from "../../tasks/types";
 import { useContextMenu, type MenuItem } from "../ContextMenu";
@@ -78,6 +78,10 @@ export function taskMenuItems(root: string, task: Task, state: BoardState | null
   items.push(running && (alive || task.agent === "queued")
     ? { label: task.agent === "queued" ? "Remove from Agent Queue" : task.agent === "planning" ? "Stop Planner" : "Stop Agent", action: () => void stopAgent(root, task.id) }
     : { label: "Let Claude Work on This", action: () => void startAgent(root, task.id) });
+  // While agents work, a task can wait its turn instead of starting in a free slot.
+  if (!running && canQueue(task) && queueActive(state)) {
+    items.push({ label: "Add to Agent Queue", title: "Start it when the run queue gets to it", action: () => void enqueue(root, [task.id]) });
+  }
   if (task.agent === "interrupted" || task.agent === "limited") {
     items.push(
       { label: "Resume Agent", title: "Continue the agent's Claude session where it stopped", action: () => void resumeAgent(root, task.id, "Resumed by user") },
@@ -85,7 +89,8 @@ export function taskMenuItems(root: string, task: Task, state: BoardState | null
     );
   }
   if (!running && task.status !== "done") items.push({ label: "Plan with Claude", title: "Write a plan and move it to Todo, without changing code", action: () => void planTasks(root, [task.id]) });
-  if (alive) items.push({ label: "Open Agent Terminal", action: () => openAgentTerminal(root, task.id) });
+  if (alive) items.push({ label: "Open Agent Terminal", action: () => openAgentChat(root, task.id) });
+  else if (hasAgentChat(task)) items.push({ label: "Open Agent Chat", title: "Resume the Claude session that worked on this task", action: () => openAgentChat(root, task.id) });
   items.push("sep");
   for (const c of state?.board.columns ?? []) {
     if (c.id !== task.status) items.push({ label: `Move to ${c.title}`, action: () => void st.move(root, task.id, c.id, Number.MAX_SAFE_INTEGER) });

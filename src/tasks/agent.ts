@@ -5,6 +5,7 @@
 import { projectModel } from "../claudeModel";
 import { api } from "../api";
 import { findPane, useWorkspace } from "../store/workspace";
+import { paneIds } from "../store/layout";
 import { useAccounts } from "../store/accounts";
 import { terminals } from "../terminal/registry";
 import type { PaneStatus, Project } from "../types";
@@ -16,10 +17,19 @@ import { notifyTask } from "../notify";
 import { listen } from "@tauri-apps/api/event";
 import { isSessionId, sessionsApi } from "../claudeSessions";
 import { accountEnv } from "../store/accounts";
+import { handleLimit, installAutoSwitch } from "../autoSwitch";
+import { useTheming } from "../theming/store";
 
 const trim = (p: string) => (p.length > 1 ? p.replace(/\/+$/, "") : p);
 const shq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 const oneLine = (s: string) => s.replace(/\s+/g, " ").trim();
+
+/** Agents work behind the scenes: their terminals open in the background, grouped under "Agents". */
+const AGENT_TAB = { background: true, group: "agents" } as const;
+
+/** Setting: close an agent's terminal once its task is done (or its planner finished). */
+export const CLOSE_AGENT_TERMINALS_SETTING = "tasks.closeAgentTerminals";
+export const closeAgentTerminals = () => useTheming.getState().settings[CLOSE_AGENT_TERMINALS_SETTING] !== false;
 
 export function projectForRoot(root: string): Project | undefined {
   const r = trim(root);
@@ -44,7 +54,7 @@ export function agentView(task: Task, pane: PaneStatus | undefined, alive: boole
   if (a === "failed" || (alive && pane?.state === "error" && a === "running")) return { kind: "failed", label: "Failed", title: "The agent failed — see the progress log" };
   if (a === "queued") return { kind: "queued", label: "Queued", title: "Waiting for a free agent slot" };
   if (a === "interrupted") return { kind: "interrupted", label: "Interrupted", title: "The agent's session ended unexpectedly (app closed, restart, crash); it can resume where it left off" };
-  if (a === "limited") return { kind: "limited", label: "Usage limit", title: "Paused by a Claude usage limit; resumes after the reset or when you switch accounts" };
+  if (a === "limited") return { kind: "limited", label: "Usage limit", title: "Paused by a Claude usage limit; resumes after the reset or when the account switches (by hand or with auto-switch)" };
   if (a === "planning") {
     if (task.paneId && !alive) return { kind: "detached", label: "Planner ended", title: "The planning agent's terminal is gone" };
     return { kind: "planning", label: "Planning", title: "Claude is planning this task (no code changes)" };
@@ -104,6 +114,21 @@ function runningIds(state: BoardState): string[] {
 }
 function busyCount(state: BoardState): number {
   return runningIds(state).length;
+}
+
+/** The board's agents are at work: agents running or planning, tasks queued, or the queue stopped.
+ *  Then "Add to queue" is offered next to "start now". */
+export function queueActive(state: BoardState | null | undefined): boolean {
+  if (!state) return false;
+  return !!state.board.settings.paused || state.tasks.some((t) => t.agent === "queued" || (["running", "blocked", "planning"].includes(t.agent) && !!livePane(t)));
+}
+
+/** An open task that can join the run queue: not queued, no live agent, and no interrupted
+ *  session waiting to be resumed (queueing would start a fresh one). */
+export function canQueue(task: Task): boolean {
+  if (task.status === "done" || task.agent === "queued") return false;
+  if ((task.agent === "interrupted" || task.agent === "limited") && isSessionId(task.session)) return false;
+  return !(livePane(task) && ["running", "blocked", "planning"].includes(task.agent));
 }
 
 /** The run queue in start order: the board's `runQueue` (queued tasks only), then queued
@@ -194,6 +219,7 @@ async function launchInner(root: string, task: Task, mode: AgentMode = "work"): 
     title: `${task.id} · ${oneLine(task.title)}`.slice(0, 60),
     // Not restored after a restart: re-running the initial prompt would start the task over.
     ephemeral: true,
+    ...AGENT_TAB,
   });
   if (!paneId) return false;
   if (mode === "plan") {
@@ -245,7 +271,7 @@ export async function planTasks(root: string, ids: string[]): Promise<number> {
     try {
       const cmd = `cd ${shq(project.rootPath)} && claude${modelFlag} ${shq(buildPlanPrompt(group, project.rootPath))}`;
       const title = group.length === 1 ? `Plan ${group[0].id} · ${oneLine(group[0].title)}` : `Plan ${group.map((t) => t.id).join(", ")}`;
-      const paneId = useWorkspace.getState().addTerminal(project.id, { claude: true, command: cmd, title: title.slice(0, 60), ephemeral: true });
+      const paneId = useWorkspace.getState().addTerminal(project.id, { claude: true, command: cmd, title: title.slice(0, 60), ephemeral: true, ...AGENT_TAB });
       if (!paneId) continue;
       for (const t of group) await useTasks.getState().update(root, t.id, { agent: "planning", paneId, log: "Claude planner started in tCon" });
       started += group.length;
@@ -404,6 +430,84 @@ export function openAgentTerminal(root: string, id: string): boolean {
   return true;
 }
 
+/** Open the Claude chat that worked on a task: its live agent terminal, or else its session
+ *  resumed (`claude --resume`) in a new terminal, to read what it did or ask follow-ups. */
+export function openAgentChat(root: string, id: string): boolean {
+  if (openAgentTerminal(root, id)) return true;
+  const task = taskById(root, id);
+  const project = projectForRoot(root);
+  if (!task || !project || !hasAgentChat(task)) return false;
+  const cwd = task.worktree || project.rootPath;
+  // A merged task's worktree may be gone; Claude then looks for the session in the project root.
+  const cd = task.worktree ? `{ cd ${shq(cwd)} 2>/dev/null || cd ${shq(project.rootPath)}; }` : `cd ${shq(cwd)}`;
+  const model = projectModel(project);
+  const modelFlag = model === "default" ? "" : ` --model ${shq(model)}`;
+  const paneId = useWorkspace.getState().addTerminal(project.id, {
+    claude: true,
+    command: `${cd} && claude${modelFlag} --resume ${task.session}`,
+    title: `${id} · chat`,
+    ephemeral: true,
+  });
+  if (!paneId) return false;
+  useWorkspace.getState().setActive(project.id);
+  return true;
+}
+
+/** The task has a chat to open: a live agent terminal, or a recorded session that isn't
+ *  waiting to be resumed as an agent (interrupted / limited agents resume instead). */
+export function hasAgentChat(task: Task): boolean {
+  if (livePane(task)) return true;
+  if (task.agent === "interrupted" || task.agent === "limited" || task.agent === "running" || task.agent === "blocked") return false;
+  return isSessionId(task.session);
+}
+
+// ---------------- closing finished agents' terminals ----------------
+
+const closing = new Set<string>();
+/** Close an agent's pane once Claude has finished its turn. Waits (up to ~3 min) while Claude
+ *  is still working or while you're looking at the terminal; never closes a project's last one. */
+function closeWhenFinished(paneId: string, stillFinished: () => boolean) {
+  if (closing.has(paneId)) return;
+  closing.add(paneId);
+  let tries = 0;
+  const check = () => {
+    const ws = useWorkspace.getState();
+    const found = findPane(ws, paneId);
+    if (!found || !closeAgentTerminals() || !stillFinished()) return void closing.delete(paneId);
+    const [project, pane] = found;
+    const tab = project.terminalTabs.find((t) => paneIds(t.layout).includes(paneId));
+    const watching = ws.activeProjectId === project.id && project.activeTerminalTabId === tab?.id && !project.panelHidden;
+    const working = !pane.exited && ws.statuses[paneId]?.state === "working";
+    const others = Object.keys(project.panes).length > 1 || project.editorGroups.some((g) => g.tabs.length);
+    if (others && !watching && !working) {
+      closing.delete(paneId);
+      ws.closePane(project.id, paneId);
+      return;
+    }
+    if (++tries >= 36) return void closing.delete(paneId);
+    window.setTimeout(check, 5000);
+  };
+  window.setTimeout(check, 4000);
+}
+
+/** Agents that finished between two loads of a board: close their terminals. */
+function closeFinishedAgents(root: string, prev: BoardState, next: BoardState) {
+  if (!closeAgentTerminals()) return;
+  const before = new Map(prev.tasks.map((t) => [t.id, t]));
+  for (const t of next.tasks) {
+    const was = before.get(t.id);
+    if (!was || !t.paneId) continue;
+    const pane = t.paneId;
+    if (t.agent === "done" && was.agent !== "done") {
+      closeWhenFinished(pane, () => taskById(root, t.id)?.agent === "done");
+    } else if (was.agent === "planning" && t.agent !== "planning") {
+      // One planner can plan several tasks: close it when none of them is still planning.
+      const planning = () => !!useTasks.getState().boards[root]?.state?.tasks.some((x) => x.paneId === pane && x.agent === "planning");
+      if (!planning()) closeWhenFinished(pane, () => !planning());
+    }
+  }
+}
+
 /** Start whatever the scheduler says may start now (run mode, free slots, dependencies,
  *  file conflicts, pause). */
 const pumping = new Set<string>();
@@ -463,7 +567,7 @@ export async function resumeAgent(root: string, id: string, why = "Resumed"): Pr
     const prompt = oneLine(`Continue tCon task ${id} where you left off: check the ## Progress log in
       ${trim(project.rootPath)}/.tcon/tasks/${id}.md and the git state, then carry on with the protocol.`);
     const cmd = `cd ${shq(cwd)} && claude${modelFlag} --resume ${task.session} ${shq(prompt)}`;
-    const paneId = useWorkspace.getState().addTerminal(project.id, { claude: true, command: cmd, title: `${id} · ${oneLine(task.title)}`.slice(0, 60), ephemeral: true });
+    const paneId = useWorkspace.getState().addTerminal(project.id, { claude: true, command: cmd, title: `${id} · ${oneLine(task.title)}`.slice(0, 60), ephemeral: true, ...AGENT_TAB });
     if (!paneId) return false;
     await useTasks.getState().update(root, id, { agent: "running", paneId, log: `${why} — Claude session resumed` });
     return true;
@@ -547,8 +651,13 @@ async function onLimit(paneId: string, message: string, resetAt: number | null) 
       limitPaused.add(root);
       await useTasks.getState().saveSettings(root, { paused: true });
     }
+    // Auto-switch: a switch moves limited agents via the account subscription below.
+    const outcome = await handleLimit(paneId, message, resetAt, { boardOptIn: st.board.settings.autoSwitchAccount });
+    if (outcome.kind === "move") void onAccountSwitch(outcome.prevConfig);
     const name = projectForRoot(root)?.name ?? root;
-    void notifyTask(`${name} · usage limit`, `${t.id} paused${when ? ` until ${when}` : ""}. Switch accounts to continue now.`);
+    if (outcome.kind !== "switched" && outcome.kind !== "move") {
+      void notifyTask(`${name} · usage limit`, `${t.id} paused${when ? ` until ${when}` : ""}.${outcome.kind === "exhausted" ? "" : " Switch accounts to continue now."}`);
+    }
     if (resetAt) {
       window.clearTimeout(limitTimers.get(root));
       const ms = Math.max(30_000, resetAt * 1000 - Date.now() + 60_000);
@@ -556,9 +665,10 @@ async function onLimit(paneId: string, message: string, resetAt: number | null) 
     }
     return;
   }
-  // Not a task agent: tell the user about the session.
+  // Not a task agent: switch accounts (and resume it there) or tell the user about the session.
   const found = findPane(useWorkspace.getState(), paneId);
-  if (found) void notifyTask(`${found[0].name} · Claude usage limit`, message);
+  const outcome = await handleLimit(paneId, message, resetAt, { restartPane: true });
+  if (found && (outcome.kind === "off" || outcome.kind === "foreign")) void notifyTask(`${found[0].name} · Claude usage limit`, message);
 }
 
 /** Continue agents paused by a usage limit (after the reset, or on another account). */
@@ -658,6 +768,7 @@ export function installAgentRuntime(): () => void {
   if (runtimeInstalled) return () => {};
   runtimeInstalled = true;
   window.setTimeout(() => void refreshInstalledSkill(), 3000);
+  const offAutoSwitch = installAutoSwitch();
 
   const offLoad = onBoardLoaded((root, prev, next) => {
     // Never on the first load of a board.
@@ -678,7 +789,10 @@ export function installAgentRuntime(): () => void {
         if (fresh.length) schedulePlan(root, fresh.map((t) => t.id));
       }
     }
-    if (prev) notifyTransitions(root, prev, next);
+    if (prev) {
+      notifyTransitions(root, prev, next);
+      closeFinishedAgents(root, prev, next);
+    }
     // A task that left Todo / got an agent no longer needs its prompt.
     for (const p of useTasks.getState().prompts) {
       if (p.root !== root) continue;
@@ -715,6 +829,7 @@ export function installAgentRuntime(): () => void {
 
   return () => {
     runtimeInstalled = false;
+    offAutoSwitch();
     offLoad();
     offWs();
     offAcct();

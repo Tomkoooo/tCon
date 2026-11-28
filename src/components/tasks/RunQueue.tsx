@@ -1,14 +1,16 @@
 // Run queue panel (board header): auto-pickup, run mode and agent limits, the queue itself
-// (drag to reorder) with why each task waits, a preview of the start groups, and Stop / Resume.
+// (drag to reorder, add or remove tasks) with why each task waits, a preview of the start
+// groups, and Stop / Resume.
 import { useMemo, useState } from "react";
 import {
-  enqueue, queuePreview, reorderQueue, resumeQueue, startNextOnly, stopAfterCurrent, stopAgent, stopAllNow, livePane,
+  CLOSE_AGENT_TERMINALS_SETTING, canQueue, enqueue, queuePreview, reorderQueue, resumeQueue, startNextOnly, stopAfterCurrent, stopAgent, stopAllNow, livePane,
 } from "../../tasks/agent";
 import { useTasks } from "../../tasks/store";
 import type { AutoPickup, BoardSettings, BoardState, PickupPosition } from "../../tasks/types";
 import { Icon } from "../icons";
 import { CommitInput, Segmented, Select, Toggle } from "../ui";
 import { PriorityIcon } from "./parts";
+import { useSetting } from "../settingsKit";
 
 const QUEUE_DRAG = "text/tcon-queue";
 
@@ -48,6 +50,7 @@ export function QueueControl({ root, state }: { root: string; state: BoardState 
 export function RunQueuePanel({ root, state, onClose }: { root: string; state: BoardState; onClose(): void }) {
   const s = state.board.settings;
   const save = (patch: Partial<BoardSettings>) => void useTasks.getState().saveSettings(root, patch);
+  const [closeTerms, setCloseTerms] = useSetting<boolean>(CLOSE_AGENT_TERMINALS_SETTING, true);
   const preview = useMemo(() => queuePreview(state), [state]);
   const byId = useMemo(() => new Map(state.tasks.map((t) => [t.id, t])), [state]);
   const { running, queued, paused } = queueCounts(state);
@@ -57,6 +60,10 @@ export function RunQueuePanel({ root, state, onClose }: { root: string; state: B
     const t = byId.get(id);
     return t && (t.agent === "idle" || t.agent === "done" || t.agent === "failed" || !t.agent);
   });
+  // Tasks that can join the queue, grouped by column in board order.
+  const addable = state.board.columns
+    .map((c) => ({ col: c, tasks: (state.columns[c.id] ?? []).map((id) => byId.get(id)).filter((t): t is NonNullable<typeof t> => !!t && canQueue(t)) }))
+    .filter((g) => g.tasks.length);
   const parallel = (s.runMode !== "rolling" || s.maxAgents > 1) && s.isolation !== "worktree";
 
   const onDrop = (e: React.DragEvent, index: number) => {
@@ -136,6 +143,10 @@ export function RunQueuePanel({ root, state, onClose }: { root: string; state: B
             { value: "auto", label: "Resume automatically" },
           ]}
         />
+        <span className="tkq-label" title="When an agent hits a Claude usage limit (5-hour or weekly), switch to the next account that isn't limited and continue there. Settings → Accounts can turn this on for all sessions.">Switch accounts on usage limit</span>
+        <Toggle checked={s.autoSwitchAccount} onChange={(v) => save({ autoSwitchAccount: v })} />
+        <span className="tkq-label" title="Close an agent's terminal when its task is done (all boards). Open the chat again from the task.">Close finished agent terminals</span>
+        <Toggle checked={closeTerms} onChange={setCloseTerms} />
         <span className="tkq-label" title="Each agent works on its own branch (tcon/T-n) in a separate git worktree">Isolation</span>
         <Segmented<BoardSettings["isolation"]>
           ariaLabel="Isolation"
@@ -204,6 +215,25 @@ export function RunQueuePanel({ root, state, onClose }: { root: string; state: B
           );
         })}
       </div>
+
+      {addable.length > 0 && (
+        <div className="tkq-add">
+          <Icon name="plus" size={12} />
+          <Select
+            ariaLabel="Add a task to the queue"
+            title={`Adds the task ${s.pickupPosition === "front" ? "at the front of" : s.pickupPosition === "priority" ? "by priority to" : "at the end of"} the queue`}
+            value=""
+            onChange={(id) => id && void enqueue(root, [id])}
+          >
+            <option value="" disabled>Add a task to the queue…</option>
+            {addable.map((g) => (
+              <optgroup key={g.col.id} label={g.col.title}>
+                {g.tasks.map((t) => <option key={t.id} value={t.id}>{t.id} · {t.title}</option>)}
+              </optgroup>
+            ))}
+          </Select>
+        </div>
+      )}
 
       <div className="tkq-foot">
         {todoIdle.length > 0 && (

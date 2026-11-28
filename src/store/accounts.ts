@@ -7,6 +7,7 @@ import { api } from "../api";
 import type { Account, AuthStatus } from "../types";
 import { findPane, profileEnv, useWorkspace } from "./workspace";
 import { isSessionId, resumeCommand, sessionsApi } from "../claudeSessions";
+import { isLimited, limitedUntil, limitWindow, pruneLimits, usageCurrent, type AccountLimit, type AccountUsage, type AccountUsageByWindow } from "../accountRotation";
 
 export const DEFAULT_ACCOUNT: Account = { id: "default", configDir: null };
 
@@ -23,6 +24,10 @@ interface AccountsState {
   pendingActivate: string | null;
   /** the one-time "add your other accounts" tip was dismissed (persisted) */
   nudgeDismissed: boolean;
+  /** accounts that hit their usage limit (persisted until the reset) */
+  limits: Record<string, AccountLimit>;
+  /** latest usage warning per account and limit window (5-hour / weekly; persisted) */
+  usage: Record<string, AccountUsageByWindow>;
 
   load(): Promise<void>;
   refresh(id?: string): Promise<void>;
@@ -34,6 +39,10 @@ interface AccountsState {
   logout(id: string): Promise<void>;
   onPaneExit(projectId: string, paneId: string, code: number | null): void;
   dismissNudge(): void;
+  markLimited(id: string, resetAt: number | null, message: string): void;
+  noteUsage(id: string, usage: AccountUsage): void;
+  /** Forget limits / warnings whose reset has passed. */
+  pruneLimits(): void;
 }
 
 const shq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
@@ -68,6 +77,15 @@ function persist(accounts: Account[], activeId: string) {
   api.settingSet("claudeActiveAccount", activeId).catch(() => {});
 }
 
+/** The account whose config dir this is (null/"" = the default account). */
+export function accountForConfigDir(dir: string | null | undefined): Account | undefined {
+  return useAccounts.getState().accounts.find((a) => (a.configDir ?? null) === (dir || null));
+}
+
+function persistLimits(limits: Record<string, AccountLimit>, usage: Record<string, AccountUsageByWindow>) {
+  api.settingSet("claudeAccountLimits", JSON.stringify({ limits, usage })).catch(() => {});
+}
+
 let lastRefresh = 0;
 
 export const useAccounts = create<AccountsState>((set, get) => ({
@@ -78,6 +96,8 @@ export const useAccounts = create<AccountsState>((set, get) => ({
   logins: {},
   pendingActivate: null,
   nudgeDismissed: true, // until loaded: never flash the tip
+  limits: {},
+  usage: {},
 
   async load() {
     try {
@@ -87,6 +107,9 @@ export const useAccounts = create<AccountsState>((set, get) => ({
       const active = await api.settingGet("claudeActiveAccount");
       const dismissed = (await api.settingGet("accountsNudgeDismissed")) === "1";
       set({ accounts, activeId: accounts.some((a) => a.id === active) ? active! : DEFAULT_ACCOUNT.id, nudgeDismissed: dismissed || accounts.length > 1 });
+      const saved = JSON.parse((await api.settingGet("claudeAccountLimits")) || "{}") as { limits?: Record<string, AccountLimit>; usage?: Record<string, AccountUsageByWindow> };
+      set({ limits: saved.limits ?? {}, usage: saved.usage ?? {} });
+      get().pruneLimits();
     } catch {
       /* backend not ready */
     }
@@ -145,9 +168,12 @@ export const useAccounts = create<AccountsState>((set, get) => ({
     set((s) => {
       const status = { ...s.status };
       delete status[id];
-      return { accounts, activeId, status };
+      const limits = { ...s.limits };
+      delete limits[id];
+      return { accounts, activeId, status, limits };
     });
     persist(accounts, activeId);
+    persistLimits(get().limits, get().usage);
   },
 
   login(id, relogin = false) {
@@ -177,6 +203,39 @@ export const useAccounts = create<AccountsState>((set, get) => ({
     api.settingSet("accountsNudgeDismissed", "1").catch(() => {});
   },
 
+  markLimited(id, resetAt, message) {
+    const window = limitWindow(message);
+    const prev = get().limits[id];
+    // A weekly limit outlasts a 5-hour one: keep whichever lifts later.
+    const next: AccountLimit = { limitedAt: Date.now(), window, resetAt, message };
+    const keepPrev = !!prev && isLimited(prev, Date.now()) && limitedUntil(prev) > limitedUntil(next);
+    const limits = keepPrev ? get().limits : { ...get().limits, [id]: next };
+    const usage = { ...get().usage, [id]: { ...get().usage[id], [window]: { percent: 100, resetAt, at: Date.now(), message } } };
+    set({ limits, usage });
+    persistLimits(limits, usage);
+  },
+
+  noteUsage(id, note) {
+    const usage = { ...get().usage, [id]: { ...get().usage[id], [limitWindow(note.message)]: note } };
+    set({ usage });
+    persistLimits(get().limits, usage);
+  },
+
+  pruneLimits() {
+    const now = Date.now();
+    const limits = pruneLimits(get().limits, now);
+    let dropped = Object.keys(limits).length !== Object.keys(get().limits).length;
+    const usage: Record<string, AccountUsageByWindow> = {};
+    for (const [id, byWindow] of Object.entries(get().usage)) {
+      const kept = Object.fromEntries(Object.entries(byWindow ?? {}).filter(([, u]) => usageCurrent(u as AccountUsage, now))) as AccountUsageByWindow;
+      if (Object.keys(kept).length !== Object.keys(byWindow ?? {}).length) dropped = true;
+      if (Object.keys(kept).length) usage[id] = kept;
+    }
+    if (!dropped) return;
+    set({ limits, usage });
+    persistLimits(limits, usage);
+  },
+
   onPaneExit(projectId, paneId, code) {
     const accountId = get().logins[paneId];
     if (!accountId) return;
@@ -201,11 +260,11 @@ export const useAccounts = create<AccountsState>((set, get) => ({
   },
 }));
 
-/** After switching: restart idle Claude sessions so they pick up the new login. */
 /** Move a pane's Claude session to the active account and restart it there. Sessions with a
  *  recorded id resume exactly (the transcript is copied into the new config dir first); the
- *  rest fall back to `claude --continue`, once per directory. */
-async function restartOnActiveAccount(paneId: string, prevConfig: string | null, continued: Set<string>) {
+ *  rest fall back to `claude --continue`, once per directory. `prompt` is sent as the first
+ *  message of the resumed session. */
+export async function restartOnActiveAccount(paneId: string, prevConfig: string | null, continued: Set<string>, prompt?: string) {
   const ws = useWorkspace.getState();
   const found = findPane(ws, paneId);
   if (!found) return;
@@ -213,9 +272,9 @@ async function restartOnActiveAccount(paneId: string, prevConfig: string | null,
   const newConfig = accountEnv().CLAUDE_CONFIG_DIR ?? null;
   if (isSessionId(pane.sessionId)) {
     const ok = await sessionsApi.copy(prevConfig, newConfig, pane.cwd, pane.sessionId).catch(() => false);
-    if (ok) return ws.restartPane(paneId, resumeCommand(pane.sessionId));
+    if (ok) return ws.restartPane(paneId, resumeCommand(pane.sessionId) + (prompt ? ` ${shq(prompt)}` : ""));
   }
-  const cmd = continued.has(pane.cwd) ? "claude" : "claude --continue";
+  const cmd = (continued.has(pane.cwd) ? "claude" : "claude --continue") + (prompt ? ` ${shq(prompt)}` : "");
   continued.add(pane.cwd);
   ws.restartPane(paneId, cmd);
 }

@@ -46,6 +46,12 @@ const P = {
   fetch: <path d="M8 2.5v7.5M4.5 6.5L8 10l3.5-3.5M3 13.5h10" />,
   help: <><circle cx="8" cy="8" r="6" /><path d="M6.2 6.3a1.9 1.9 0 0 1 3.7.5c0 1.3-1.9 1.6-1.9 2.7" /><circle cx="8" cy="11.4" r=".35" /></>,
   history: <><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v3h3" /><path d="M8 5v3l2 1.5" /></>,
+  database: <><ellipse cx="8" cy="3.75" rx="5" ry="1.75" /><path d="M3 3.75v8.5c0 1 2.2 1.75 5 1.75s5-.75 5-1.75v-8.5M3 8c0 1 2.2 1.75 5 1.75S13 9 13 8" /></>,
+  server: <><rect x="2.5" y="2.5" width="11" height="4.5" rx="1" /><rect x="2.5" y="9" width="11" height="4.5" rx="1" /><path d="M5 4.75h.01M5 11.25h.01" /></>,
+  chart: <path d="M2.5 2.5v11h11M5.5 10.5V8M8.5 10.5V5.5M11.5 10.5V7" />,
+  book: <path d="M3 3.5a1 1 0 0 1 1-1h8.5v9.5H4a1 1 0 0 0-1 1zM3 12.5a1 1 0 0 0 1 1h8.5" />,
+  folder: <path d="M2 4.5a1 1 0 0 1 1-1h3.25l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z" />,
+  mail: <><rect x="2" y="3.5" width="12" height="9" rx="1.5" /><path d="M2.5 4.5L8 9l5.5-4.5" /></>,
 } as const;
 
 /** Filled glyphs (rendered with fill instead of stroke). */
